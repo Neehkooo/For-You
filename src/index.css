@@ -163,5 +163,98 @@ body {
 .shake { animation: shake 0.4s ease; }
 @keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
 
+/* Cat Delivery */
+.cat-delivery {
+  position: relative;
+  width: min(18rem, 78vw);
+  aspect-ratio: 1 / 1.1;
+  margin: 0 auto;
+  perspective: 1000px;
+  user-select: none;
+}
+.cat-delivery-sm { width: 9rem; }
+.cat-delivery-tap { cursor: pointer; }
+.cat-delivery-tap:focus-visible { outline: 2px solid var(--color-seal); outline-offset: 8px; border-radius: 16px; }
+.cat-delivery-tap:hover .cat-delivery-svg { transform: translateY(-3px) scale(1.02); }
+.cat-delivery-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.cat-tail {
+  transform-origin: 140px 170px;
+  animation: catTailWag 3.2s ease-in-out infinite;
+}
+@keyframes catTailWag {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-8deg); }
+}
+
+.cat-ear-left {
+  transform-origin: 62px 66px;
+  animation: catEarTwitchLeft 5.5s ease-in-out infinite;
+}
+@keyframes catEarTwitchLeft {
+  0%, 88%, 100% { transform: rotate(0deg); }
+  90% { transform: rotate(-5deg); }
+  93% { transform: rotate(3deg); }
+  96% { transform: rotate(-2deg); }
+}
+
+.cat-ear-right {
+  transform-origin: 138px 66px;
+  animation: catEarTwitchRight 6s ease-in-out infinite;
+}
+@keyframes catEarTwitchRight {
+  0%, 84%, 100% { transform: rotate(0deg); }
+  86% { transform: rotate(5deg); }
+  89% { transform: rotate(-3deg); }
+  92% { transform: rotate(2deg); }
+}
+
+.cat-eyes-group {
+  transform-origin: 100px 74px;
+  animation: catBlink 4.2s infinite;
+}
+@keyframes catBlink {
+  0%, 94%, 98%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.08); }
+}
+
+.cat-flap-group {
+  transform-origin: 100px 116px;
+  transition: transform 0.85s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.cat-delivery[data-stage="opening"] .cat-flap-group,
+.cat-delivery[data-stage="open"] .cat-flap-group,
+.cat-delivery[data-stage="emerge"] .cat-flap-group {
+  transform: rotateX(170deg) translateY(-2px);
+}
+
+.cat-letter-paper {
+  transition: transform 1.1s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.8s ease 0.4s;
+}
+.cat-delivery[data-stage="emerge"] .cat-letter-paper {
+  transform: translateY(-135%) rotate(-3deg);
+  opacity: 0;
+}
+
+.cat-heart-1 {
+  animation: catHeartBob1 2.2s ease-in-out infinite alternate;
+}
+.cat-heart-2 {
+  animation: catHeartBob2 1.8s ease-in-out infinite alternate;
+}
+@keyframes catHeartBob1 {
+  0% { transform: translateY(0) scale(0.95); opacity: 0.8; }
+  100% { transform: translateY(-7px) scale(1.1); opacity: 1; }
+}
+@keyframes catHeartBob2 {
+  0% { transform: translateY(0) scale(0.9); opacity: 0.75; }
+  100% { transform: translateY(-8px) scale(1.08); opacity: 1; }
+}
+
 /* Brand badge: indigo gradient that matches the icon's colours */
 .brand-badge { display: grid; place-items: center; height: 2.25rem; width: 2.25rem; padding: 0.3rem; border-radius: 0.7rem; background: linear-gradient(160deg, #6a4fe0, #34209a); box-shadow: 0 4px 12px -4px rgb(52 32 154 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25); flex-shrink: 0; }

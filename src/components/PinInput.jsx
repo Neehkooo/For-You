@@ -1,12 +1,13 @@
 import { useRef } from 'react';
 
-export default function PinInput({ value, onChange, autoFocus = false, invalid = false, label = 'Passcode' }) {
+export default function PinInput({ value, onChange, autoFocus = false, invalid = false, disabled = false, label = 'Passcode' }) {
   const refs = useRef([]);
   const digits = [0, 1, 2, 3].map((i) => value[i] || '');
 
   const commit = (arr) => onChange(arr.join('').slice(0, 4));
 
   const handleChange = (i, e) => {
+    if (disabled) return;
     const d = e.target.value.replace(/\D/g, '').slice(-1);
     if (!d) return;
     const next = [...digits];
@@ -16,6 +17,7 @@ export default function PinInput({ value, onChange, autoFocus = false, invalid =
   };
 
   const handleKeyDown = (i, e) => {
+    if (disabled) return;
     if (e.key === 'Backspace') {
       e.preventDefault();
       const next = [...digits];
@@ -26,6 +28,7 @@ export default function PinInput({ value, onChange, autoFocus = false, invalid =
   };
 
   const handlePaste = (e) => {
+    if (disabled) return;
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
     if (!pasted) return;
     e.preventDefault();
@@ -40,6 +43,7 @@ export default function PinInput({ value, onChange, autoFocus = false, invalid =
           key={i}
           ref={(el) => (refs.current[i] = el)}
           value={d}
+          disabled={disabled}
           onChange={(e) => handleChange(i, e)}
           onKeyDown={(e) => handleKeyDown(i, e)}
           onPaste={handlePaste}
@@ -50,7 +54,7 @@ export default function PinInput({ value, onChange, autoFocus = false, invalid =
           aria-label={`${label} digit ${i + 1}`}
           className={`h-14 w-12 rounded-lg border bg-white/50 text-center font-display text-2xl text-plum ${
             invalid ? 'border-red-600' : 'border-plum/30'
-          }`}
+          } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
         />
       ))}
     </div>

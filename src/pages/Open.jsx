@@ -10,6 +10,7 @@ import Letterbox from '../components/Letterbox.jsx';
 import { useNav } from '../lib/nav.js';
 
 function MusicButton({ music }) {
+  if (!music || !music.src || !music.src.startsWith('data:audio/')) return null;
   const [audio] = useState(() => new Audio(music.src));
   const [playing, setPlaying] = useState(false);
 
@@ -86,17 +87,19 @@ function Reader({ letter, onExit }) {
 
 // Parses long tokens formatted as "<box>-<token>" or "<box>-u<unlockAt>-<token>"
 const parseLongToken = (raw) => {
-  if (!raw) return null;
+  if (!raw || typeof raw !== 'string') return null;
   const parts = raw.split('-');
   const box = parts[0] ? resolveBox(parts[0]) : resolveBox(null);
 
   if (parts.length >= 3 && parts[1].startsWith('u') && /^\d{12,15}$/.test(parts[1].slice(1))) {
     const unlockAt = Number(parts[1].slice(1));
     const token = parts.slice(2).join('-');
+    if (token.length < 40 || !/^[A-Za-z0-9-]+$/.test(token)) return null;
     return { box, unlockAt, token };
   }
 
   const token = parts.slice(1).join('-');
+  if (token.length < 40 || !/^[A-Za-z0-9-]+$/.test(token)) return null;
   return { box, unlockAt: null, token };
 };
 
@@ -121,6 +124,16 @@ export default function Open({ token: longToken, shortId, onExit }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [shakeKey, setShakeKey] = useState(0);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setLockoutSeconds((s) => Math.max(0, s - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutSeconds]);
 
   const load = async () => {
     setSource({ status: 'loading' });
@@ -153,6 +166,10 @@ export default function Open({ token: longToken, shortId, onExit }) {
   const change = async (value) => {
     setPin(value);
     setError('');
+    if (lockoutSeconds > 0) {
+      setError(`Too many incorrect attempts. Please wait ${lockoutSeconds} second${lockoutSeconds === 1 ? '' : 's'}.`);
+      return;
+    }
     if (value.length !== 4 || source.status !== 'ready' || busy) return;
     setBusy(true);
     try {
@@ -163,14 +180,25 @@ export default function Open({ token: longToken, shortId, onExit }) {
         return;
       }
       setBusy(false);
+      setFailedAttempts(0);
       setLetter(l);
       setStage('emerge');
       setTimeout(() => setPhase('read'), 1100);
     } catch {
       setBusy(false);
-      setError('That passcode doesn’t match. Check it and try again.');
+      const nextFailed = failedAttempts + 1;
+      setFailedAttempts(nextFailed);
       setPin('');
       setShakeKey((k) => k + 1);
+
+      if (nextFailed >= 5) {
+        setLockoutSeconds(30);
+        setError('Too many incorrect attempts. Please wait 30 seconds.');
+      } else if (nextFailed >= 3) {
+        setError(`That passcode doesn’t match. (${5 - nextFailed} attempts remaining before temporary lockout)`);
+      } else {
+        setError('That passcode doesn’t match. Check it and try again.');
+      }
     }
   };
 
@@ -232,7 +260,9 @@ export default function Open({ token: longToken, shortId, onExit }) {
         {stage === 'closed' && (
           <>
             <h1 className="font-display text-4xl font-light">A letter is waiting.</h1>
-            <p className="mt-3 text-plum/70">Tap the letterbox to open it.</p>
+            <p className="mt-3 text-plum/70">
+              {source.box?.startsWith('cat') ? 'Tap the kitty to open the letter.' : 'Tap the letterbox to open it.'}
+            </p>
           </>
         )}
         {stage === 'opening' && <p className="pt-6 text-plum/70">Opening…</p>}
@@ -240,7 +270,7 @@ export default function Open({ token: longToken, shortId, onExit }) {
           <div className={shakeKey ? 'shake' : ''} key={shakeKey}>
             <p className="text-plum/70">Enter the 4-digit passcode.</p>
             <div className="mt-5 flex justify-center">
-              <PinInput value={pin} onChange={change} autoFocus invalid={!!error} />
+              <PinInput value={pin} onChange={change} autoFocus invalid={!!error} disabled={lockoutSeconds > 0} />
             </div>
             <p role="alert" className="mt-4 min-h-6 text-sm text-red-700">{busy ? 'Opening…' : error}</p>
           </div>

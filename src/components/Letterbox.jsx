@@ -1,8 +1,14 @@
 import { boxColors, DEFAULT_BOX } from '../lib/themes.js';
+import CatDelivery from './CatDelivery.jsx';
 
-// A mailbox that opens. `stage` drives the animation:
-// closed -> opening (door swings up) -> open (letter visible) -> emerge (letter slides out).
+// A letterbox/delivery presentation that opens. `stage` drives the animation:
+// closed -> opening -> open (letter visible) -> emerge (letter slides out).
+// Supports both the classic mailbox and the animated Cat holding a letter.
 export default function Letterbox({ color = DEFAULT_BOX, stage = 'closed', onOpen, small = false, className = '' }) {
+  if (typeof color === 'string' && color.startsWith('cat')) {
+    return <CatDelivery color={color} stage={stage} onOpen={onOpen} small={small} className={className} />;
+  }
+
   const c = boxColors.find((b) => b.id === color) || boxColors[0];
   const tappable = typeof onOpen === 'function' && stage === 'closed';
   const activate = () => { if (tappable) onOpen(); };
