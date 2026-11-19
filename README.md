@@ -14,7 +14,7 @@ A small site for writing a letter, sealing it with a four-digit passcode, and sh
 3. In the project's **Storage** tab, add **Upstash for Redis** and connect it to the project. This creates the database and its keys.
 4. Redeploy. Short links (`/l/abc123`) and scheduled delivery start working.
 
-Without step 3 the site still works. Letters use long links that carry the letter inside the URL, and scheduled delivery is turned off.
+Without step 3 the site still works seamlessly: letters use client-side encrypted links that carry the letter inside the URL, and scheduled letters feature a live countdown timer until the unlock date. Connecting Upstash gives you shorter links (`/l/abc123`) and server-side letter withholding.
 
 ## Notes
 

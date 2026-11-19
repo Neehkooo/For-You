@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Letter from '../components/Letter.jsx';
 import PinInput from '../components/PinInput.jsx';
+import CountdownTimer from '../components/CountdownTimer.jsx';
 import { openLetter } from '../lib/seal.js';
 import { fetchLetter } from '../lib/api.js';
 import { exportLetterPdf, pdfName, savePdf } from '../lib/pdf.js';
@@ -83,17 +84,36 @@ function Reader({ letter, onExit }) {
   );
 }
 
+// Parses long tokens formatted as "<box>-<token>" or "<box>-u<unlockAt>-<token>"
+const parseLongToken = (raw) => {
+  if (!raw) return null;
+  const parts = raw.split('-');
+  const box = parts[0] ? resolveBox(parts[0]) : resolveBox(null);
+
+  if (parts.length >= 3 && parts[1].startsWith('u') && /^\d{12,15}$/.test(parts[1].slice(1))) {
+    const unlockAt = Number(parts[1].slice(1));
+    const token = parts.slice(2).join('-');
+    return { box, unlockAt, token };
+  }
+
+  const token = parts.slice(1).join('-');
+  return { box, unlockAt: null, token };
+};
+
 // Opened by a short link (/l/<id>, shortId set) or a long link (#l-<token>.<box>, token set).
 // Flow: letterbox -> tap to open -> passcode -> letter slides out -> reader.
 export default function Open({ token: longToken, shortId, onExit }) {
   const [source, setSource] = useState(() => {
     if (!longToken) return { status: 'loading' };
-    // Long-link token is "<box>-<token>". The box name has no hyphen, and the token never has a raw one.
-    const i = longToken.indexOf('-');
-    const box = i > 0 ? longToken.slice(0, i) : null;
-    const token = i > 0 ? longToken.slice(i + 1) : longToken;
-    return { status: 'ready', token, box: resolveBox(box) };
+    const parsed = parseLongToken(longToken);
+    if (!parsed) return { status: 'error' };
+
+    if (parsed.unlockAt && Date.now() < parsed.unlockAt) {
+      return { status: 'locked', unlockAt: parsed.unlockAt, box: parsed.box, token: parsed.token };
+    }
+    return { status: 'ready', token: parsed.token, box: parsed.box, unlockAt: parsed.unlockAt };
   });
+
   const [stage, setStage] = useState('closed');   // mailbox: closed | opening | open | emerge
   const [phase, setPhase] = useState('box');      // box | read
   const [pin, setPin] = useState('');
@@ -107,9 +127,22 @@ export default function Open({ token: longToken, shortId, onExit }) {
     try {
       const r = await fetchLetter(shortId);
       setSource({ ...r, box: resolveBox(r.box) });
-    } catch { setSource({ status: 'error' }); }
+    } catch {
+      setSource({ status: 'error' });
+    }
   };
-  useEffect(() => { if (shortId) load(); }, [shortId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (shortId) load();
+  }, [shortId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleUnlock = () => {
+    if (source.token) {
+      setSource((prev) => ({ ...prev, status: 'ready' }));
+    } else if (shortId) {
+      load();
+    }
+  };
 
   const openBox = () => {
     if (stage !== 'closed') return;
@@ -124,6 +157,11 @@ export default function Open({ token: longToken, shortId, onExit }) {
     setBusy(true);
     try {
       const l = await openLetter(source.token, value);
+      if (l.unlockAt && Date.now() < l.unlockAt) {
+        setBusy(false);
+        setError('This letter is scheduled and still sealed.');
+        return;
+      }
       setBusy(false);
       setLetter(l);
       setStage('emerge');
@@ -154,13 +192,25 @@ export default function Open({ token: longToken, shortId, onExit }) {
   );
 
   if (source.status === 'locked') {
-    const when = new Date(source.unlockAt).toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' });
+    const when = new Date(source.unlockAt).toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' });
     return shell(
       <>
         <Letterbox small color={source.box} />
         <h1 className="mt-6 font-display text-4xl font-light">Not yet.</h1>
-        <p className="mt-3 text-plum/70">This letter opens on <span className="font-medium text-plum">{when}</span>.</p>
-        <button onClick={load} className="mt-6 rounded-full border border-plum/30 px-6 py-2.5 hover:bg-white/50">Check again</button>
+        <p className="mt-3 text-sm text-plum/70">This letter opens on:</p>
+        <p className="mt-1 font-medium text-plum">{when}</p>
+        
+        {/* Real-time ticking countdown timer */}
+        <CountdownTimer targetTime={source.unlockAt} onUnlock={handleUnlock} />
+
+        <div className="mt-8 flex justify-center gap-3">
+          <button
+            onClick={handleUnlock}
+            className="rounded-full border border-plum/30 bg-white/40 px-6 py-2.5 text-sm hover:bg-white/70"
+          >
+            Check again
+          </button>
+        </div>
       </>
     );
   }

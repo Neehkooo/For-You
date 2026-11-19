@@ -72,9 +72,6 @@ export const pdfName = (letter) => {
 };
 
 export async function savePdf(blob, filename) {
-  // Inside the Claude preview, downloads go through the host; on a normal site use a plain link.
-  const host = window.claude?.use ? await window.claude.use('downloads') : null;
-  if (host) { await host.save({ filename, data: blob }); return; }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename;

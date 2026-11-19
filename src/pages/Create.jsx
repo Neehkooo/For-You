@@ -119,17 +119,16 @@ export default function Create() {
     }
     setBusy(true);
     try {
-      const token = await sealLetter({ ...letter, pages }, pin);
+      const token = await sealLetter({ ...letter, pages, unlockAt }, pin);
       const saved = await saveLetter(token, unlockAt, letter.box);
       if (saved) {
         setLink(`${window.location.origin}/l/${saved.id}`);
         setLinkKind(unlockAt ? 'scheduled' : 'short');
-      } else if (unlockAt) {
-        setError('Scheduled delivery needs the online version of the site. It isn’t available in this preview.');
       } else {
         const base = import.meta.env.VITE_SHARE_BASE || `${window.location.origin}${window.location.pathname}`;
-        setLink(`${base}#l-${letter.box}-${token}`);
-        setLinkKind('long');
+        const prefix = unlockAt ? `${letter.box}-u${unlockAt}` : letter.box;
+        setLink(`${base}#l-${prefix}-${token}`);
+        setLinkKind(unlockAt ? 'scheduled-long' : 'long');
       }
     } catch {
       setError('Something went wrong creating the letter. Try again.');
@@ -162,8 +161,8 @@ export default function Create() {
           <div className="mt-6">
             <h1 className="font-display text-4xl font-light">Your letter is ready.</h1>
             <p className="mt-3 text-plum/75">
-              {linkKind === 'scheduled'
-                ? `It will open on ${new Date(when).toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' })}. Until then the reader sees only a countdown.`
+              {linkKind.startsWith('scheduled')
+                ? `It will open on ${new Date(when).toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' })}. Until then the reader sees only a countdown.`
                 : 'Share this link. The reader will need your passcode to open it.'}
             </p>
             <input readOnly value={link} onFocus={(e) => e.target.select()} className="field mt-6" aria-label="Letter link" />
@@ -171,7 +170,7 @@ export default function Create() {
               <button onClick={copy} className="rounded-full bg-seal px-6 py-3 font-medium text-petal hover:brightness-110">
                 {copied ? 'Copied' : 'Copy link'}
               </button>
-              {linkKind === 'long' ? (
+              {linkKind.includes('long') ? (
                 <button type="button" onClick={() => setViewNow(link.split('#l-')[1])}
                   className="rounded-full border border-plum/30 px-6 py-3 hover:bg-white/50">Open letter</button>
               ) : (
@@ -179,7 +178,7 @@ export default function Create() {
               )}
               <button onClick={again} className="rounded-full px-4 py-3 text-plum/70 hover:text-plum">Write another</button>
             </div>
-            {linkKind === 'long' && link.length > 8000 && (
+            {linkKind.includes('long') && link.length > 8000 && (
               <p className="mt-5 text-sm text-amber-800">
                 This link is long ({Math.round(link.length / 1024)} KB) because of the picture or music. Messaging apps may cut it off, so email or pasting it into a browser works best.
               </p>
@@ -346,7 +345,7 @@ export default function Create() {
                 </div>
               )}
               <p className="mt-2 text-xs text-plum/55">
-                Scheduled letters need the online version of the site. The reader sees only a countdown until then, even if they have the link.
+                The reader sees a live countdown until the scheduled time, even if they have the link.
               </p>
             </fieldset>
 
