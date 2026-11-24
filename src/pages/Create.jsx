@@ -91,6 +91,7 @@ export default function Create() {
   const [when, setWhen] = useState(defaultWhen);
   const [link, setLink] = useState('');
   const [linkKind, setLinkKind] = useState('');
+  const [storageMissing, setStorageMissing] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -303,7 +304,9 @@ export default function Create() {
       if (saved) {
         setLink(`${window.location.origin}/${saved.id}`);
         setLinkKind(unlockAt ? 'scheduled' : 'short');
+        setStorageMissing(false);
       } else {
+        setStorageMissing(true);
         const base = import.meta.env.VITE_SHARE_BASE || `${window.location.origin}${window.location.pathname}`;
         const prefix = unlockAt ? `${letter.box}-u${unlockAt}` : letter.box;
         setLink(`${base}#l-${prefix}-${token}`);
@@ -341,6 +344,7 @@ export default function Create() {
     setPin('');
     setPinLength(isV13Unlocked() ? 6 : 4);
     setLink('');
+    setStorageMissing(false);
     setSelectedId(null);
     setSchedule(false);
     setWhen(defaultWhen());
@@ -393,6 +397,14 @@ export default function Create() {
                 Write another
               </button>
             </div>
+            {storageMissing && (
+              <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50/90 p-3 text-xs leading-relaxed text-amber-900">
+                <strong>Short links aren’t available yet.</strong> Letter storage isn’t connected to this deployment, so
+                the letter above is carried inside the link itself. Once Upstash Redis is connected to the Vercel project
+                (<code className="font-mono">KV_REST_API_URL</code> / <code className="font-mono">KV_REST_API_TOKEN</code>),
+                every new letter gets a short 16-character link.
+              </p>
+            )}
             {linkKind.includes('long') && link.length > 8000 && (
               <p className="mt-5 text-sm text-amber-800">
                 This link is long ({Math.round(link.length / 1024)} KB) because of the picture or music. Messaging apps
