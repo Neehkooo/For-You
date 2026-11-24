@@ -8,6 +8,7 @@ import { exportLetterPdf, pdfName, savePdf } from '../lib/pdf.js';
 import { getPages, resolveBox } from '../lib/themes.js';
 import Letterbox from '../components/Letterbox.jsx';
 import { useNav } from '../lib/nav.js';
+import { recordLetterOpened } from '../lib/admin.js';
 
 function MusicButton({ music }) {
   if (!music || !music.src || !music.src.startsWith('data:audio/')) return null;
@@ -182,6 +183,7 @@ export default function Open({ token: longToken, shortId, onExit }) {
       setBusy(false);
       setFailedAttempts(0);
       setLetter(l);
+      recordLetterOpened();
       setStage('emerge');
       setTimeout(() => setPhase('read'), 1100);
     } catch {

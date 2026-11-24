@@ -23,6 +23,7 @@ import { sealLetter } from '../lib/seal.js';
 import { compressImage, readAsDataURL, MAX_AUDIO } from '../lib/media.js';
 import { saveLetter } from '../lib/api.js';
 import { exportLetterPdf, pdfName, savePdf } from '../lib/pdf.js';
+import { recordLetterCreated, getMaintenance } from '../lib/admin.js';
 
 const chip =
   'rounded-full border border-plum/30 px-4 py-1.5 text-sm hover:bg-white/50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors';
@@ -189,6 +190,10 @@ export default function Create() {
   // ---------- create ----------
   const create = async () => {
     setError('');
+    const maint = getMaintenance();
+    if (maint.enabled && maint.lockButton) {
+      return setError(maint.message || 'Scheduled maintenance is active. Letter creation is temporarily paused.');
+    }
     if (!pages.some((p) => p.trim())) {
       setError('Write your letter first.');
       setStep(2);
@@ -205,6 +210,7 @@ export default function Create() {
     try {
       const token = await sealLetter({ ...letter, pages, unlockAt }, pin);
       const saved = await saveLetter(token, unlockAt, letter.box);
+      recordLetterCreated();
       if (saved) {
         setLink(`${window.location.origin}/l/${saved.id}`);
         setLinkKind(unlockAt ? 'scheduled' : 'short');
