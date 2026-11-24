@@ -12,7 +12,7 @@ export default function Header({ route, onAdminOpen }) {
   return (
     <>
       <header className="sticky top-0 z-20 border-b border-plum/10 bg-white/35 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-2.5">
             {/* Logo — opens admin login modal */}
             <button
@@ -31,7 +31,7 @@ export default function Header({ route, onAdminOpen }) {
             <button
               type="button"
               onClick={() => go('')}
-              className="font-display text-2xl italic tracking-tight text-plum hover:opacity-80 transition-opacity"
+              className="font-display text-xl italic tracking-tight text-plum hover:opacity-80 transition-opacity sm:text-2xl"
               aria-label="For You home"
             >
               For You
@@ -57,15 +57,6 @@ export default function Header({ route, onAdminOpen }) {
                 className="px-3 py-1.5 text-plum/70 hover:text-plum"
               >
                 Home
-              </button>
-            )}
-            {route !== 'write' && route !== 'admin' && (
-              <button
-                type="button"
-                onClick={() => go('#write')}
-                className="rounded-full border border-plum/30 px-4 py-1.5 hover:bg-white/60"
-              >
-                Write a letter
               </button>
             )}
           </nav>

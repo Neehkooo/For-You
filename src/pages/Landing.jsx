@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNav } from '../lib/nav.js';
 import { getMaintenance } from '../lib/admin.js';
+import { useV13Unlock } from '../lib/release.js';
 
 export default function Landing() {
   const [open, setOpen] = useState(false);
   const { go } = useNav();
   const letterRef = useRef(null);
   const [maint, setMaint] = useState(getMaintenance);
+  const { unlocked: v13Unlocked } = useV13Unlock();
 
   // Listen for maintenance updates from the admin panel
   useEffect(() => {
@@ -42,14 +44,14 @@ export default function Landing() {
   };
 
   return (
-    <main className="grid min-h-[calc(100vh-8.5rem)] items-center gap-16 px-6 py-16 sm:px-12 lg:grid-cols-2 lg:px-24">
+    <main className="grid min-h-[calc(100vh-8.5rem)] items-center gap-8 px-5 py-10 sm:gap-16 sm:px-8 sm:py-16 lg:grid-cols-2 lg:px-24">
       <div className="max-w-xl">
-        <h1 className="font-display text-5xl font-light leading-[1.05] sm:text-6xl">
+        <h1 className="font-display text-4xl font-light leading-[1.08] sm:text-5xl lg:text-6xl">
           Write the letter you've been meaning to send.
         </h1>
-        <p className="mt-6 max-w-md text-lg leading-relaxed text-plum/75">
-          Choose the paper and the handwriting, lock it with a four-digit passcode, and share a link.
-          Only someone with the passcode can read it.
+        <p className="mt-5 max-w-md text-base leading-relaxed text-plum/75 sm:mt-6 sm:text-lg">
+          Choose the paper and the handwriting, lock it with a {v13Unlocked ? '4 or 6-digit' : '4-digit'} passcode, and
+          share a link. Only someone with the passcode can read it.
         </p>
 
         {/* Maintenance Banner */}
@@ -76,7 +78,7 @@ export default function Landing() {
         )}
       </div>
 
-      <div className="grid place-items-center pb-8 pt-16">
+      <div className="grid place-items-center pb-6 pt-8 sm:pb-8 sm:pt-16">
         <div className={`env ${isLocked ? 'opacity-60 pointer-events-none' : ''}`} data-open={open}>
           <div className="env-shadow" aria-hidden="true" />
           <div className="env-back" aria-hidden="true" />

@@ -4,15 +4,20 @@ import Create from './pages/Create.jsx';
 import Open from './pages/Open.jsx';
 import Admin from './pages/Admin.jsx';
 import Hearts from './components/Hearts.jsx';
+import Snowflakes from './components/Snowflakes.jsx';
 import Header from './components/Header.jsx';
 import { NavContext } from './lib/nav.js';
 import { recordVisit } from './lib/admin.js';
 
 // Routes:  ""  -> home,  "#write" -> editor,  "#l-<box>-<token>" -> long link,
-//          "/l/<id>" (path) -> short link, stored on the server.
+//          "/<code>" or "/l/<id>" (path) -> short link, stored on the server.
 //          "#admin" -> admin dashboard
 const shortIdFromPath = () => {
-  const m = window.location.pathname.match(/^\/l\/([A-Za-z0-9]{6,16})\/?$/);
+  const path = window.location.pathname.replace(/\/+$/, '');
+  const m =
+    path.match(/^\/l\/([A-Za-z0-9]{6,16})$/) ||
+    path.match(/^\/([A-Za-z0-9]{16})$/) ||
+    window.location.search.match(/[?&](?:l|id)=([A-Za-z0-9]{6,16})/);
   return m ? m[1] : null;
 };
 
@@ -69,6 +74,7 @@ export default function App() {
     <NavContext.Provider value={{ go }}>
       <div className="flex min-h-screen flex-col">
         <Hearts />
+        <Snowflakes />
         <Header route={headerRoute} onAdminOpen={() => go('#admin')} />
         <div key={route} className={`flex-1 ${leaving ? 'page-out' : 'page-in'}`}>{page}</div>
         <footer className="px-6 py-6 text-center text-sm text-plum/70">

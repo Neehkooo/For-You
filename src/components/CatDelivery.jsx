@@ -75,12 +75,12 @@ export default function CatDelivery({
           fill={palette.belly}
         />
 
-        {/* Left ear */}
+        {/* Left ear - has black patch on Calico */}
         <g className="cat-ear-left">
           <path
             d="M 62 66 L 48 24 C 46 20, 52 18, 56 20 L 84 50 Z"
-            fill={palette.points || palette.body}
-            stroke={palette.shade}
+            fill={palette.leftEar || (palette.patch && palette.id === 'cat_calico' ? palette.patch : (palette.points || palette.body))}
+            stroke={palette.leftEar ? '#111827' : palette.shade}
             strokeWidth="2"
             strokeLinejoin="round"
           />

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { getUpdateLogs } from '../lib/admin.js';
+import { V13_UNLOCK_LABEL, formatRemaining, useV13Unlock } from '../lib/release.js';
 
 export default function UpdateLogsModal({ onClose }) {
   const [logs, setLogs] = useState(getUpdateLogs);
+  const { unlocked: v13Unlocked, remaining: v13Remaining } = useV13Unlock();
 
   useEffect(() => {
     const refresh = () => setLogs(getUpdateLogs());
@@ -23,7 +25,7 @@ export default function UpdateLogsModal({ onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-plum/10 px-6 py-5 sm:px-8">
+        <div className="flex items-center justify-between border-b border-plum/10 px-4 py-4 sm:px-8 sm:py-5">
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xl" aria-hidden="true">
@@ -48,21 +50,33 @@ export default function UpdateLogsModal({ onClose }) {
         </div>
 
         {/* Scrollable logs list */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 sm:px-8 space-y-8">
+        <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-6 space-y-6 sm:space-y-8">
           {logs.map((log, index) => (
             <article
               key={log.id || log.version || index}
-              className="rounded-2xl border border-plum/15 bg-white/70 p-5 sm:p-6 shadow-xs"
+              className="rounded-2xl border border-plum/15 bg-white/70 p-4 sm:p-6 shadow-xs"
             >
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-plum/10 pb-3">
                 <div className="flex items-center gap-2.5">
                   <span className="rounded-full bg-seal px-3 py-0.5 text-xs font-semibold text-petal">
                     {log.version}
                   </span>
+                  {!v13Unlocked && log.version === 'v1.3.0' && (
+                    <span className="rounded-full border border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900">
+                      🔒 Time-locked · unlocks {V13_UNLOCK_LABEL}
+                    </span>
+                  )}
                   <h3 className="font-display text-xl font-medium text-plum">{log.title}</h3>
                 </div>
                 <time className="text-xs font-medium text-plum/60">{log.date}</time>
               </div>
+
+              {!v13Unlocked && log.version === 'v1.3.0' && (
+                <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
+                  These features unlock automatically in <strong>{formatRemaining(v13Remaining)}</strong>. Until then the
+                  editor keeps them behind the lock.
+                </p>
+              )}
 
               <div className="mt-4 space-y-4 text-xs sm:text-sm">
                 {/* New Features */}

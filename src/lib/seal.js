@@ -74,7 +74,11 @@ export function sanitizeLetter(raw) {
     .map((p) => (typeof p === 'string' ? p.slice(0, MAX_BODY * 2) : ''));
   if (pages.length === 0) pages.push('');
 
-  const theme = themes.some((t) => t.id === raw.theme) ? raw.theme : 'blush';
+  const theme = themes.some((t) => t.id === raw.theme)
+    ? raw.theme
+    : typeof raw.theme === 'string' && (/^custom_[0-9a-fA-F]{6}$/.test(raw.theme) || /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(raw.theme))
+    ? raw.theme
+    : 'blush';
   const font = fonts.some((f) => f.id === raw.font) ? raw.font : 'vibes';
   const template = templates.some((t) => t.id === raw.template) ? raw.template : 'plain';
   const box = resolveBox(raw.box);
@@ -83,6 +87,8 @@ export function sanitizeLetter(raw) {
   const stickers = rawStickers.slice(0, MAX_STICKERS).filter((s) => s && typeof s === 'object').map((s, idx) => ({
     id: typeof s.id === 'string' && /^[a-zA-Z0-9_-]{1,16}$/.test(s.id) ? s.id : `s_${idx}`,
     emoji: typeof s.emoji === 'string' ? s.emoji.slice(0, 8) : '❤️',
+    kind: s.kind === 'stamp' ? 'stamp' : 'emoji',
+    stampId: typeof s.stampId === 'string' && /^[a-zA-Z0-9_-]{1,24}$/.test(s.stampId) ? s.stampId : null,
     page: Number.isInteger(s.page) && s.page >= 0 && s.page < MAX_PAGES ? s.page : 0,
     x: Number.isFinite(s.x) ? Math.min(98, Math.max(2, s.x)) : 50,
     y: Number.isFinite(s.y) ? Math.min(98, Math.max(2, s.y)) : 50,

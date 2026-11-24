@@ -4,7 +4,7 @@ import { redis, configured } from '../../server/redis.js';
 const MAX_TOKEN = 900_000;               // stays under Upstash's request size limit
 const TTL_SECONDS = 60 * 60 * 24 * 730;  // letters are kept for at least two years
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
-const ID_LENGTH = 12;                    // 57^12 ~= 1.15e21 entropy, prevents brute force enumeration
+const ID_LENGTH = 16;                    // 16 mixed-case alphanumeric chars: 57^16 ~= 1.6e28, prevents enumeration
 
 // Cryptographically secure, unbiased random ID generator
 const newId = () => Array.from({ length: ID_LENGTH }, () => ALPHABET[randomInt(0, ALPHABET.length)]).join('');

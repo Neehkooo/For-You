@@ -1,6 +1,6 @@
 # For You
 
-A small site for writing a letter, sealing it with a four-digit passcode, and sharing it as a link.
+A small site for writing a letter, sealing it with a four or six-digit passcode, and sharing it as a link.
 
 ## Run it on your computer
 
@@ -20,4 +20,4 @@ Without step 3 the site still works seamlessly: letters use client-side encrypte
 
 - Letters are encrypted in the browser with the passcode. The server stores only the encrypted letter.
 - Stored letters expire after two years.
-- Four-digit passcodes can be guessed by someone who has the link, so don't rely on them for sensitive information.
+- Four-digit passcodes can be guessed by someone who has the link, so don't rely on them for sensitive information. Six-digit passcodes are stronger; letters sealed with either length still open with the length they were created with.

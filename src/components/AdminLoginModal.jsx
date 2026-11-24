@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { isAdminLoggedIn, loginAdmin, logoutAdmin, DEFAULT_ADMIN_PASSCODE } from '../lib/admin.js';
+import { isAdminLoggedIn, loginAdmin, logoutAdmin } from '../lib/admin.js';
 
 export default function AdminLoginModal({ onClose, onLoginSuccess }) {
   const [passcode, setPasscode] = useState('');
   const [error, setError] = useState('');
   const [loggedIn, setLoggedIn] = useState(isAdminLoggedIn);
-  const [showPass, setShowPass] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -100,10 +99,10 @@ export default function AdminLoginModal({ onClose, onLoginSuccess }) {
               <label className="block text-xs font-semibold uppercase tracking-wider text-plum/80" htmlFor="admin-pass">
                 Admin Passcode
               </label>
-              <div className="relative mt-1.5">
+              <div className="mt-1.5">
                 <input
                   id="admin-pass"
-                  type={showPass ? 'text' : 'password'}
+                  type="password"
                   value={passcode}
                   onChange={(e) => {
                     setPasscode(e.target.value);
@@ -111,19 +110,10 @@ export default function AdminLoginModal({ onClose, onLoginSuccess }) {
                   }}
                   autoFocus
                   placeholder="Enter passcode"
-                  className="field pr-16"
+                  className="field"
+                  autoComplete="current-password"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-plum/60 hover:text-plum"
-                >
-                  {showPass ? 'Hide' : 'Show'}
-                </button>
               </div>
-              <p className="mt-1.5 text-xs text-plum/50">
-                Default passcode: <code className="rounded bg-plum/10 px-1 py-0.5 font-mono">{DEFAULT_ADMIN_PASSCODE}</code>
-              </p>
             </div>
 
             {error && (

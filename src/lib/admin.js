@@ -6,7 +6,7 @@ const MAINTENANCE_KEY = 'for_you_maintenance';
 const STATS_KEY = 'for_you_stats';
 const LOGS_KEY = 'for_you_update_logs';
 
-export const DEFAULT_ADMIN_PASSCODE = 'admin2026';
+export const DEFAULT_ADMIN_PASSCODE = 'nico072002';
 
 // Safe storage wrapper supporting browser localStorage/sessionStorage and in-memory fallback
 const memStorage = new Map();
@@ -197,6 +197,30 @@ export function recordVisit() {
 // ---------- Update Logs ----------
 export const DEFAULT_UPDATE_LOGS = [
   {
+    id: 'log-0',
+    version: 'v1.3.0',
+    date: 'November 27, 2026',
+    title: 'Bird Messenger, Vintage Postage Stamps & Aesthetic Stationery',
+    features: [
+      'Messenger Bird Delivery: Majestic animated dove holding the letter in its beak that flaps and flies away into the sky upon unlocking',
+      'Custom Bird Plumage: 7 avian varieties (Dove, Bluebird, Rose Finch, Canary, Lavender Finch, Emerald Hummingbird, Midnight Raven) plus full custom hex color picker',
+      'Authentic Postage Stamps: 10 collectible vintage postal stamps with perforated scalloped borders, airmail postmarks, and wax seals, distinct from emojis',
+      'Solid Color Palette & 8 New Gradients: Lavender Mist, Sunset Glow, Ocean Whisper, Matcha Latte, Cherry Blossom, Golden Hour, Starlight Navy, and Aurora Dream plus custom solid color picker',
+      '6-Digit Passcode Protection: Enhanced cryptographic security with 6-digit PIN input for letter sealing and unlocking',
+      '7 New Aesthetic Cursive Fonts: Parisienne, Alex Brush, Sacramento, Satisfy, Marck Script, Homemade Apple, and Shadows Into Light',
+    ],
+    ui: [
+      'Romantic Winter Atmosphere: Gentle falling crystal snowflakes alongside floating hearts on a dreamy sky blue gradient background',
+      'Stationery Template Collection: Vintage ornamental border, pressed floral garland, modern minimal divider, and embossed cardstock, plus previews of upcoming animated stationery templates',
+      'Header Navigation Streamlining: Simplified top navigation highlighting the brand and update logs',
+    ],
+    fixes: [
+      'Calico cat coat correction with authentic black patch on the left ear',
+      'Legacy 4-digit passcode backwards compatibility and Enter-key submit support',
+      'URL-safe hash encoding and luminance-based auto-contrast for custom color letters',
+    ],
+  },
+  {
     id: 'log-1',
     version: 'v1.2.0',
     date: 'November 19, 2026',
@@ -263,7 +287,15 @@ export function getUpdateLogs() {
     const raw = local.getItem(LOGS_KEY);
     if (!raw) return DEFAULT_UPDATE_LOGS;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_UPDATE_LOGS;
+    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_UPDATE_LOGS;
+    const knownVersions = new Set(parsed.map((l) => l.version || l.id));
+    const missing = DEFAULT_UPDATE_LOGS.filter((l) => !knownVersions.has(l.version) && !knownVersions.has(l.id));
+    if (missing.length > 0) {
+      const merged = [...missing, ...parsed];
+      local.setItem(LOGS_KEY, JSON.stringify(merged));
+      return merged;
+    }
+    return parsed;
   } catch {
     return DEFAULT_UPDATE_LOGS;
   }

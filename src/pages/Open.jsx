@@ -5,7 +5,7 @@ import CountdownTimer from '../components/CountdownTimer.jsx';
 import { openLetter } from '../lib/seal.js';
 import { fetchLetter } from '../lib/api.js';
 import { exportLetterPdf, pdfName, savePdf } from '../lib/pdf.js';
-import { getPages, resolveBox } from '../lib/themes.js';
+import { boxColors, catColors, birdColors, getPages, resolveBox } from '../lib/themes.js';
 import Letterbox from '../components/Letterbox.jsx';
 import { useNav } from '../lib/nav.js';
 import { recordLetterOpened } from '../lib/admin.js';
@@ -56,7 +56,7 @@ function Reader({ letter, onExit }) {
   };
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-14">
+    <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-14">
       <Letter key={cur} letter={letter} page={cur} className={`min-h-96 ${dir === 'next' ? 'turn-next' : 'turn-prev'}`} />
 
       {pages.length > 1 && (
@@ -86,22 +86,36 @@ function Reader({ letter, onExit }) {
   );
 }
 
-// Parses long tokens formatted as "<box>-<token>" or "<box>-u<unlockAt>-<token>"
+// Parses long tokens formatted as "<box>-<token>" or "<box>-u<unlockAt>-<token>".
+// Box ids can contain underscores (cat_orange, bird_dove, cat_1a2b3c…), so the box prefix is
+// matched against the known ids before the rest is treated as the encrypted token.
+const isKnownBox = (id) =>
+  boxColors.some((b) => b.id === id) ||
+  catColors.some((c) => c.id === id) ||
+  birdColors.some((b) => b.id === id) ||
+  /^(cat|bird)_[0-9a-f]{6}$/.test(id);
+
 const parseLongToken = (raw) => {
   if (!raw || typeof raw !== 'string') return null;
-  const parts = raw.split('-');
-  const box = parts[0] ? resolveBox(parts[0]) : resolveBox(null);
 
-  if (parts.length >= 3 && parts[1].startsWith('u') && /^\d{12,15}$/.test(parts[1].slice(1))) {
-    const unlockAt = Number(parts[1].slice(1));
-    const token = parts.slice(2).join('-');
-    if (token.length < 40 || !/^[A-Za-z0-9-]+$/.test(token)) return null;
-    return { box, unlockAt, token };
+  let rest = raw;
+  let box = resolveBox(null);
+  let unlockAt = null;
+
+  const dash = rest.indexOf('-');
+  if (dash > 0 && isKnownBox(rest.slice(0, dash))) {
+    box = resolveBox(rest.slice(0, dash));
+    rest = rest.slice(dash + 1);
   }
 
-  const token = parts.slice(1).join('-');
-  if (token.length < 40 || !/^[A-Za-z0-9-]+$/.test(token)) return null;
-  return { box, unlockAt: null, token };
+  const unlock = rest.match(/^u(\d{12,15})-(.+)$/s);
+  if (unlock) {
+    unlockAt = Number(unlock[1]);
+    rest = unlock[2];
+  }
+
+  if (rest.length < 40 || !/^[A-Za-z0-9-]+$/.test(rest)) return null;
+  return { box, unlockAt, token: rest };
 };
 
 // Opened by a short link (/l/<id>, shortId set) or a long link (#l-<token>.<box>, token set).
@@ -164,17 +178,15 @@ export default function Open({ token: longToken, shortId, onExit }) {
     setTimeout(() => setStage('open'), 900);
   };
 
-  const change = async (value) => {
-    setPin(value);
-    setError('');
+  const submitPin = async (candidate = pin) => {
+    if (!candidate || (candidate.length !== 6 && candidate.length !== 4) || source.status !== 'ready' || busy) return;
     if (lockoutSeconds > 0) {
       setError(`Too many incorrect attempts. Please wait ${lockoutSeconds} second${lockoutSeconds === 1 ? '' : 's'}.`);
       return;
     }
-    if (value.length !== 4 || source.status !== 'ready' || busy) return;
     setBusy(true);
     try {
-      const l = await openLetter(source.token, value);
+      const l = await openLetter(source.token, candidate);
       if (l.unlockAt && Date.now() < l.unlockAt) {
         setBusy(false);
         setError('This letter is scheduled and still sealed.');
@@ -204,10 +216,22 @@ export default function Open({ token: longToken, shortId, onExit }) {
     }
   };
 
+  const change = (value) => {
+    setPin(value);
+    setError('');
+    if (lockoutSeconds > 0) {
+      setError(`Too many incorrect attempts. Please wait ${lockoutSeconds} second${lockoutSeconds === 1 ? '' : 's'}.`);
+      return;
+    }
+    if (value.length === 6) {
+      submitPin(value);
+    }
+  };
+
   if (phase === 'read' && letter) return <Reader letter={letter} onExit={onExit} />;
 
   const shell = (children) => (
-    <main className="grid min-h-[calc(100vh-8.5rem)] place-items-center px-6 py-10">
+    <main className="grid min-h-[calc(100vh-8.5rem)] place-items-center px-4 py-8 sm:px-6 sm:py-10">
       <div className="w-full max-w-sm text-center">{children}</div>
     </main>
   );
@@ -216,7 +240,7 @@ export default function Open({ token: longToken, shortId, onExit }) {
 
   if (source.status === 'missing') return shell(
     <>
-      <h1 className="font-display text-4xl font-light">This letter isn’t here.</h1>
+      <h1 className="font-display text-3xl font-light sm:text-4xl">This letter isn’t here.</h1>
       <p className="mt-3 text-plum/70">The link may be mistyped, or the letter may have been removed.</p>
     </>
   );
@@ -226,7 +250,7 @@ export default function Open({ token: longToken, shortId, onExit }) {
     return shell(
       <>
         <Letterbox small color={source.box} />
-        <h1 className="mt-6 font-display text-4xl font-light">Not yet.</h1>
+        <h1 className="mt-6 font-display text-3xl font-light sm:text-4xl">Not yet.</h1>
         <p className="mt-3 text-sm text-plum/70">This letter opens on:</p>
         <p className="mt-1 font-medium text-plum">{when}</p>
         
@@ -247,7 +271,7 @@ export default function Open({ token: longToken, shortId, onExit }) {
 
   if (source.status === 'error') return shell(
     <>
-      <h1 className="font-display text-4xl font-light">Couldn’t reach the letter.</h1>
+      <h1 className="font-display text-3xl font-light sm:text-4xl">Couldn’t reach the letter.</h1>
       <p className="mt-3 text-plum/70">Check your connection and try again.</p>
       <button onClick={shortId ? load : () => window.location.reload()} className="mt-6 rounded-full bg-seal px-6 py-2.5 text-petal hover:brightness-110">Try again</button>
     </>
@@ -261,19 +285,40 @@ export default function Open({ token: longToken, shortId, onExit }) {
       <div className="mt-8 min-h-[9rem]">
         {stage === 'closed' && (
           <>
-            <h1 className="font-display text-4xl font-light">A letter is waiting.</h1>
+            <h1 className="font-display text-3xl font-light sm:text-4xl">A letter is waiting.</h1>
             <p className="mt-3 text-plum/70">
-              {source.box?.startsWith('cat') ? 'Tap the kitty to open the letter.' : 'Tap the letterbox to open it.'}
+              {source.box?.startsWith('bird')
+                ? 'Tap the bird to open the letter.'
+                : source.box?.startsWith('cat')
+                ? 'Tap the kitty to open the letter.'
+                : 'Tap the letterbox to open it.'}
             </p>
           </>
         )}
         {stage === 'opening' && <p className="pt-6 text-plum/70">Opening…</p>}
         {showCode && (
           <div className={shakeKey ? 'shake' : ''} key={shakeKey}>
-            <p className="text-plum/70">Enter the 4-digit passcode.</p>
+            <p className="text-plum/70">Enter the 4 or 6-digit passcode.</p>
             <div className="mt-5 flex justify-center">
-              <PinInput value={pin} onChange={change} autoFocus invalid={!!error} disabled={lockoutSeconds > 0} />
+              <PinInput
+                length={6}
+                value={pin}
+                onChange={change}
+                onEnter={() => submitPin(pin)}
+                autoFocus
+                invalid={!!error}
+                disabled={lockoutSeconds > 0}
+              />
             </div>
+            {pin.length === 4 && (
+              <button
+                type="button"
+                onClick={() => submitPin(pin)}
+                className="mt-3 text-xs text-seal font-medium underline underline-offset-4 hover:brightness-110"
+              >
+                Submit 4-digit code →
+              </button>
+            )}
             <p role="alert" className="mt-4 min-h-6 text-sm text-red-700">{busy ? 'Opening…' : error}</p>
           </div>
         )}
