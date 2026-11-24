@@ -33,10 +33,11 @@ export default async function handler(req, res) {
   try {
     const raw = await redis(['GET', `letter:${id}`]);
     if (!raw) return res.status(404).json({ error: 'Not found' });
-    const { t, u, b } = JSON.parse(raw);
+    const { t, u, b, p } = JSON.parse(raw);
+    const pinLength = typeof p === 'number' ? p : null;
     // The encrypted letter is withheld until the scheduled time, so it can't be opened early.
-    if (u && Date.now() < u) return res.status(403).json({ unlockAt: u, box: b || null });
-    return res.status(200).json({ token: t, box: b || null });
+    if (u && Date.now() < u) return res.status(403).json({ unlockAt: u, box: b || null, pinLength });
+    return res.status(200).json({ token: t, box: b || null, pinLength });
   } catch {
     return res.status(502).json({ error: 'Storage error' });
   }

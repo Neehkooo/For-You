@@ -90,6 +90,7 @@ function Reader({ letter, onExit }) {
 // Box ids can contain underscores (cat_orange, bird_dove, cat_1a2b3c…), so the box prefix is
 // matched against the known ids before the rest is treated as the encrypted token.
 const isKnownBox = (id) =>
+  id === 'cake' ||
   boxColors.some((b) => b.id === id) ||
   catColors.some((c) => c.id === id) ||
   birdColors.some((b) => b.id === id) ||
@@ -101,11 +102,19 @@ const parseLongToken = (raw) => {
   let rest = raw;
   let box = resolveBox(null);
   let unlockAt = null;
+  let pinLength = null;
 
   const dash = rest.indexOf('-');
   if (dash > 0 && isKnownBox(rest.slice(0, dash))) {
     box = resolveBox(rest.slice(0, dash));
     rest = rest.slice(dash + 1);
+  }
+
+  // Optional passcode length marker: p0 (no passcode), p4, p6.
+  const pin = rest.match(/^p([046])-(.+)$/s);
+  if (pin) {
+    pinLength = Number(pin[1]);
+    rest = pin[2];
   }
 
   const unlock = rest.match(/^u(\d{12,15})-(.+)$/s);
@@ -115,7 +124,7 @@ const parseLongToken = (raw) => {
   }
 
   if (rest.length < 40 || !/^[A-Za-z0-9-]+$/.test(rest)) return null;
-  return { box, unlockAt, token: rest };
+  return { box, unlockAt, pinLength, token: rest };
 };
 
 // Opened by a short link (/l/<id>, shortId set) or a long link (#l-<token>.<box>, token set).
@@ -127,9 +136,21 @@ export default function Open({ token: longToken, shortId, onExit }) {
     if (!parsed) return { status: 'error' };
 
     if (parsed.unlockAt && Date.now() < parsed.unlockAt) {
-      return { status: 'locked', unlockAt: parsed.unlockAt, box: parsed.box, token: parsed.token };
+      return {
+        status: 'locked',
+        unlockAt: parsed.unlockAt,
+        box: parsed.box,
+        token: parsed.token,
+        pinLength: parsed.pinLength,
+      };
     }
-    return { status: 'ready', token: parsed.token, box: parsed.box, unlockAt: parsed.unlockAt };
+    return {
+      status: 'ready',
+      token: parsed.token,
+      box: parsed.box,
+      unlockAt: parsed.unlockAt,
+      pinLength: parsed.pinLength,
+    };
   });
 
   const [stage, setStage] = useState('closed');   // mailbox: closed | opening | open | emerge
@@ -141,6 +162,9 @@ export default function Open({ token: longToken, shortId, onExit }) {
   const [shakeKey, setShakeKey] = useState(0);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
+
+  // 0 = no passcode, 4 / 6 = that many digits, null = older letter (either length).
+  const declaredPin = typeof source.pinLength === 'number' ? source.pinLength : null;
 
   useEffect(() => {
     if (lockoutSeconds <= 0) return;
@@ -175,11 +199,21 @@ export default function Open({ token: longToken, shortId, onExit }) {
   const openBox = () => {
     if (stage !== 'closed') return;
     setStage('opening');
-    setTimeout(() => setStage('open'), 900);
+    setTimeout(() => {
+      setStage('open');
+      // Letters sent without a passcode open themselves as soon as the delivery is done.
+      if (declaredPin === 0) submitPin('');
+    }, 900);
   };
 
   const submitPin = async (candidate = pin) => {
-    if (!candidate || (candidate.length !== 6 && candidate.length !== 4) || source.status !== 'ready' || busy) return;
+    const lengthOk =
+      declaredPin === 0
+        ? candidate === ''
+        : declaredPin
+        ? candidate.length === declaredPin
+        : candidate.length === 4 || candidate.length === 6;
+    if (!lengthOk || source.status !== 'ready' || busy) return;
     if (lockoutSeconds > 0) {
       setError(`Too many incorrect attempts. Please wait ${lockoutSeconds} second${lockoutSeconds === 1 ? '' : 's'}.`);
       return;
@@ -223,7 +257,7 @@ export default function Open({ token: longToken, shortId, onExit }) {
       setError(`Too many incorrect attempts. Please wait ${lockoutSeconds} second${lockoutSeconds === 1 ? '' : 's'}.`);
       return;
     }
-    if (value.length === 6) {
+    if (declaredPin ? value.length >= declaredPin : value.length === 6) {
       submitPin(value);
     }
   };
@@ -296,12 +330,21 @@ export default function Open({ token: longToken, shortId, onExit }) {
           </>
         )}
         {stage === 'opening' && <p className="pt-6 text-plum/70">Opening…</p>}
-        {showCode && (
+        {showCode && declaredPin === 0 && (
+          <p className="pt-2 text-sm text-plum/70">{error || 'Opening your letter…'}</p>
+        )}
+        {showCode && declaredPin !== 0 && (
           <div className={shakeKey ? 'shake' : ''} key={shakeKey}>
-            <p className="text-plum/70">Enter the 4 or 6-digit passcode.</p>
+            <p className="text-plum/70">
+              {declaredPin === 4
+                ? 'Enter the 4-digit passcode.'
+                : declaredPin === 6
+                ? 'Enter the 6-digit passcode.'
+                : 'Enter the 4 or 6-digit passcode.'}
+            </p>
             <div className="mt-5 flex justify-center">
               <PinInput
-                length={6}
+                length={declaredPin || 6}
                 value={pin}
                 onChange={change}
                 onEnter={() => submitPin(pin)}
@@ -310,7 +353,7 @@ export default function Open({ token: longToken, shortId, onExit }) {
                 disabled={lockoutSeconds > 0}
               />
             </div>
-            {pin.length === 4 && (
+            {declaredPin === null && pin.length === 4 && (
               <button
                 type="button"
                 onClick={() => submitPin(pin)}

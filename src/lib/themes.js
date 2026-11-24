@@ -118,6 +118,9 @@ export const boxColors = [
 ];
 export const DEFAULT_BOX = 'red';
 
+// Birthday letters are delivered as a cake that is sliced open.
+export const BIRTHDAY_BOX = 'cake';
+
 // Cat delivery coat presets and customization (includes calico with black patch on left ear)
 export const catColors = [
   { id: 'cat_orange',  name: 'Ginger Tabby', body: '#f59e0b', shade: '#b45309', belly: '#fef3c7', ear: '#fca5a5', nose: '#f43f5e', eyes: '#10b981' },
@@ -224,6 +227,7 @@ export function getBirdPalette(id) {
 
 export const resolveBox = (id) => {
   if (typeof id !== 'string') return DEFAULT_BOX;
+  if (id === BIRTHDAY_BOX) return BIRTHDAY_BOX;
   if (boxColors.some((b) => b.id === id)) return id;
   if (catColors.some((c) => c.id === id)) return id;
   if (birdColors.some((b) => b.id === id)) return id;

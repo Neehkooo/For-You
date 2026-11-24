@@ -51,14 +51,16 @@ export default async function handler(req, res) {
     // If rate limiting lookup fails, proceed cautiously
   }
 
-  const { token, unlockAt, box } = req.body || {};
+  const { token, unlockAt, box, pinLength } = req.body || {};
   if (typeof token !== 'string' || token.length < 40 || token.length > MAX_TOKEN || !/^[A-Za-z0-9-]+$/.test(token))
     return res.status(400).json({ error: 'Invalid letter' });
 
   const now = Date.now();
   const unlock = Number.isFinite(unlockAt) && unlockAt > now && unlockAt < now + 5 * 365 * 864e5 ? Math.floor(unlockAt) : null;
   const colour = typeof box === 'string' && /^[a-z0-9_]{3,20}$/.test(box) ? box : null;
-  const value = JSON.stringify({ t: token, u: unlock, b: colour });
+  // 0 = no passcode, 4 or 6 = digits. null means "unknown" for older letters.
+  const pin = pinLength === 0 || pinLength === 4 || pinLength === 6 ? pinLength : null;
+  const value = JSON.stringify({ t: token, u: unlock, b: colour, p: pin });
 
   // TTL: at least 2 years, or 1 year after the scheduled unlock time to prevent premature deletion
   const ttlSeconds = unlock

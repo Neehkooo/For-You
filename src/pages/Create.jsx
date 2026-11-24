@@ -19,6 +19,7 @@ import {
   birdColors,
   DEFAULT_BIRD,
   getBirdPalette,
+  BIRTHDAY_BOX,
   resolveTheme,
 } from '../lib/themes.js';
 import Letterbox from '../components/Letterbox.jsx';
@@ -92,6 +93,7 @@ export default function Create() {
   const [link, setLink] = useState('');
   const [linkKind, setLinkKind] = useState('');
   const [storageMissing, setStorageMissing] = useState(false);
+  const [noPasscode, setNoPasscode] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -112,6 +114,7 @@ export default function Create() {
   const availableFonts = v13Unlocked ? fonts.length : fonts.filter((f) => !V13_FONT_IDS.has(f.id)).length;
   const isCat = typeof letter.box === 'string' && letter.box.startsWith('cat');
   const isBird = typeof letter.box === 'string' && letter.box.startsWith('bird');
+  const isCake = letter.box === BIRTHDAY_BOX;
 
   // ---------- pages ----------
   const setPageText = (text) =>
@@ -206,13 +209,19 @@ export default function Create() {
 
   // ---------- presentation selection ----------
   const setDeliveryType = (type) => {
+    setTestStage('closed');
     if (type === 'cat') {
       if (!isCat) setLetter((l) => ({ ...l, box: DEFAULT_CAT }));
     } else if (type === 'bird') {
       if (!isBird) setLetter((l) => ({ ...l, box: DEFAULT_BIRD }));
     } else {
-      if (isCat || isBird) setLetter((l) => ({ ...l, box: DEFAULT_BOX }));
+      if (isCat || isBird || isCake) setLetter((l) => ({ ...l, box: DEFAULT_BOX }));
     }
+  };
+
+  const setBirthday = (on) => {
+    setTestStage('closed');
+    setLetter((l) => ({ ...l, box: on ? BIRTHDAY_BOX : DEFAULT_BOX }));
   };
 
   const currentCatHex = (() => {
@@ -288,8 +297,9 @@ export default function Create() {
     if (!v13Unlocked && typeof letter.box === 'string' && letter.box.startsWith('bird')) {
       return setError(`Bird Messenger delivery unlocks ${V13_UNLOCK_LABEL}. Choose the mailbox or the cat for now.`);
     }
-    const effectivePinLength = v13Unlocked ? pinLength : 4;
-    if (pin.length !== effectivePinLength) return setError(`Enter a ${effectivePinLength}-digit passcode.`);
+    const effectivePinLength = pinLength === 0 ? 0 : v13Unlocked ? pinLength : 4;
+    if (effectivePinLength > 0 && pin.length !== effectivePinLength)
+      return setError(`Enter a ${effectivePinLength}-digit passcode.`);
     let unlockAt = null;
     if (schedule) {
       unlockAt = when;
@@ -299,8 +309,9 @@ export default function Create() {
     setBusy(true);
     try {
       const token = await sealLetter({ ...letter, pages, unlockAt }, pin);
-      const saved = await saveLetter(token, unlockAt, letter.box);
+      const saved = await saveLetter(token, unlockAt, letter.box, effectivePinLength);
       recordLetterCreated();
+      setNoPasscode(effectivePinLength === 0);
       if (saved) {
         setLink(`${window.location.origin}/${saved.id}`);
         setLinkKind(unlockAt ? 'scheduled' : 'short');
@@ -308,7 +319,9 @@ export default function Create() {
       } else {
         setStorageMissing(true);
         const base = import.meta.env.VITE_SHARE_BASE || `${window.location.origin}${window.location.pathname}`;
-        const prefix = unlockAt ? `${letter.box}-u${unlockAt}` : letter.box;
+        const prefix = [letter.box, `p${effectivePinLength}`, unlockAt ? `u${unlockAt}` : null]
+          .filter(Boolean)
+          .join('-');
         setLink(`${base}#l-${prefix}-${token}`);
         setLinkKind(unlockAt ? 'scheduled-long' : 'long');
       }
@@ -345,6 +358,7 @@ export default function Create() {
     setPinLength(isV13Unlocked() ? 6 : 4);
     setLink('');
     setStorageMissing(false);
+    setNoPasscode(false);
     setSelectedId(null);
     setSchedule(false);
     setWhen(defaultWhen());
@@ -419,7 +433,9 @@ export default function Create() {
               </p>
             )}
             <p className="mt-6 text-sm text-plum/60">
-              Send the passcode separately from the link. If it’s forgotten, the letter can’t be recovered.
+              {noPasscode
+                ? 'This letter has no passcode — anyone with this link can open it.'
+                : 'Send the passcode separately from the link. If it’s forgotten, the letter can’t be recovered.'}
             </p>
           </div>
         ) : (
@@ -1065,9 +1081,9 @@ export default function Create() {
                     <button
                       type="button"
                       onClick={() => setDeliveryType('mailbox')}
-                      aria-pressed={!isCat && !isBird}
+                      aria-pressed={!isCat && !isBird && !isCake}
                       className={`flex items-center justify-center gap-2 rounded-xl border p-3 text-sm font-medium transition-all ${
-                        !isCat && !isBird
+                        !isCat && !isBird && !isCake
                           ? 'border-seal bg-white/80 shadow-xs text-plum'
                           : 'border-plum/20 bg-white/20 text-plum/70 hover:bg-white/50'
                       }`}
@@ -1115,8 +1131,22 @@ export default function Create() {
                     </button>
                   </div>
 
+                  {/* Birthday presentation: a cake that is sliced open */}
+                  <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-xl border border-plum/20 bg-white/50 p-3">
+                    <input
+                      type="checkbox"
+                      checked={isCake}
+                      onChange={(e) => setBirthday(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-[#a3202f]"
+                    />
+                    <span className="text-xs text-plum/75">
+                      <span className="block text-sm font-semibold text-plum">🎂 Birthday letter</span>
+                      Delivered as a birthday cake with candles — the cake is sliced open and your letter rises out.
+                    </span>
+                  </label>
+
                   {/* Mailbox Color Options */}
-                  {!isCat && !isBird && (
+                  {!isCat && !isBird && !isCake && (
                     <div className="mt-5 border-t border-plum/15 pt-4">
                       <p className="mb-2.5 text-xs font-medium text-plum">Mailbox Colour</p>
                       <div className="flex flex-wrap items-center gap-3">
@@ -1271,7 +1301,7 @@ export default function Create() {
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <span className="text-xs text-plum/70">Passcode length</span>
                     <div className="flex items-center gap-1 rounded-lg border border-plum/20 bg-white/50 p-1">
-                      {[4, 6].map((n) => (
+                      {[0, 4, 6].map((n) => (
                         <button
                           key={n}
                           type="button"
@@ -1293,20 +1323,30 @@ export default function Create() {
                               : 'text-plum/70 hover:bg-white/70'
                           } ${n === 6 && !v13Unlocked ? 'opacity-55' : ''}`}
                         >
-                          {n} digits{n === 6 && !v13Unlocked && ' 🔒'}
+                          {n === 0 ? 'None' : `${n} digits`}
+                          {n === 6 && !v13Unlocked && ' 🔒'}
                         </button>
                       ))}
                     </div>
                   </div>
-                  <PinInput
-                    length={pinLength}
-                    value={pin}
-                    onChange={setPin}
-                    invalid={!!error && pin.length !== pinLength}
-                  />
-                  <p className="mt-2.5 text-xs text-plum/60">
-                    {pinLength} digits. The recipient enters this passcode to unlock and open your letter.
-                  </p>
+                  {pinLength === 0 ? (
+                    <p className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-3 py-2.5 text-xs leading-relaxed text-emerald-900">
+                      <strong>No passcode.</strong> Anyone who has the link can open this letter directly — the box is
+                      tapped and the letter opens straight away.
+                    </p>
+                  ) : (
+                    <>
+                      <PinInput
+                        length={pinLength}
+                        value={pin}
+                        onChange={setPin}
+                        invalid={!!error && pin.length !== pinLength}
+                      />
+                      <p className="mt-2.5 text-xs text-plum/60">
+                        {pinLength} digits. The recipient types exactly {pinLength} digits to unlock your letter.
+                      </p>
+                    </>
+                  )}
                 </div>
 
                 {error && (
@@ -1358,7 +1398,13 @@ export default function Create() {
                 previewTab === 'delivery' ? 'bg-seal text-petal shadow-xs font-semibold' : 'hover:bg-white/60 text-plum/70'
               }`}
             >
-              {isBird ? '🕊️ Bird Messenger' : isCat ? '🐱 Cat Delivery' : '📮 Mailbox'}
+              {isBird
+                ? '🕊️ Bird Messenger'
+                : isCat
+                ? '🐱 Cat Delivery'
+                : isCake
+                ? '🎂 Birthday Cake'
+                : '📮 Mailbox'}
             </button>
           </div>
 
@@ -1408,10 +1454,14 @@ export default function Create() {
                     ? 'Tap the messenger bird to test delivery & flight!'
                     : isCat
                     ? 'Tap the kitty to test the opening animation!'
+                    : isCake
+                    ? 'Tap the cake to slice it open!'
                     : 'Tap the letterbox to test the opening animation!'
                   : testStage === 'open'
                   ? isBird
                     ? 'Letter revealed! Tap to watch the bird fly away!'
+                    : isCake
+                    ? 'Slice cut and letter out! Tap to reset.'
                     : 'Letter revealed! Tap to close or reset.'
                   : testStage === 'emerge'
                   ? 'Flying away! ✨'
