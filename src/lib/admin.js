@@ -197,6 +197,22 @@ export function recordVisit() {
 // ---------- Update Logs ----------
 export const DEFAULT_UPDATE_LOGS = [
   {
+    id: 'log-v1-3-1',
+    version: 'v1.3.1',
+    date: 'November 28, 2026',
+    title: 'Shorter Links, No Passcode & Birthday Cake Delivery',
+    features: [
+      'No-Passcode Letters: choose None and the letter opens directly from the link, with no code to type or share',
+      'Birthday Cake Presentation: a birthday checkbox in Delivery sends the letter as a candle-lit cake that is sliced open so the letter rises out',
+    ],
+    ui: [],
+    fixes: [
+      'Shorter links: compact 16-character letter codes instead of long encrypted links',
+      'Passcode entry now shows only the number of digit boxes that were chosen — 4 boxes for a 4-digit letter, 6 for a 6-digit one',
+      'No-passcode letters no longer ask for a passcode after the delivery animation',
+    ],
+  },
+  {
     id: 'log-0',
     version: 'v1.3.0',
     date: 'November 27, 2026',
