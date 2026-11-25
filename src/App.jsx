@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer, useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import Landing from './pages/Landing.jsx';
 import Create from './pages/Create.jsx';
 import Open from './pages/Open.jsx';
@@ -81,6 +82,7 @@ export default function App() {
           All rights reserved 2026 | by: Neeehkooo
         </footer>
       </div>
+      <Analytics />
     </NavContext.Provider>
   );
 }
