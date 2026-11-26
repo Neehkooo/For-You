@@ -197,6 +197,99 @@ export function recordVisit() {
 // ---------- Update Logs ----------
 export const DEFAULT_UPDATE_LOGS = [
   {
+    id: 'log-v1-5-0',
+    version: 'v1.5.0',
+    date: 'December 22, 2026',
+    title: 'The Board: Notes That Last A Day',
+    features: [
+      'The Board: a public wall at /post-its where anyone can pin a short note and the note disappears 24 hours after it is pinned — nothing is archived',
+      'Post anonymously or sign it: leave the name empty and the note simply reads “Anonymous”',
+      'Six paper colours, and notes you pinned can be taken down early from the same browser',
+      'A live clock on every note: “just now”, “23h 41m left”, and the wall quietly refreshes itself while it is open',
+    ],
+    ui: [
+      'A cork wall with pushpins and gently tilted notes that straightens on hover, tuned for Afternoon, Dawn and Dusk',
+      'The board is one tap away as “Board” in the header and in the phone menu',
+      'A small composer: write, choose the paper, leave the name blank to stay anonymous',
+    ],
+    fixes: [],
+  },
+  {
+    id: 'log-v1-4-1',
+    version: 'v1.4.1',
+    date: 'December 21, 2026',
+    title: 'Pages Everywhere, Three Moods & Live Analytics',
+    features: [
+      'Multi-page previews: letters with more than one page now carry Prev / Next under the letter, inside the floating preview, in the expanded hover panel and in the sticker studio — all on the same page',
+      'Afternoon / Dawn / Dusk: the three appearance modes replace white, grey and dark, running from bright daylight through a warm sunrise mid-tone to a deep twilight, and each is remembered for the next visit',
+      'Colour pickers on the delivery cards: a “···” on Classic Mailbox, Cat Delivery and Bird Messenger opens a modal with that presentation’s palettes and a free colour picker',
+      'Cake colours: the Birthday letter row gets its own “···” with eight cake palettes (Strawberry, Vanilla, Chocolate, Red Velvet, Lemon, Matcha, Blueberry, Lavender) plus any custom colour — the choice follows the letter in its link',
+      'Anonymous sender: a checkbox on Step 2 hides your name — the letter is signed “Anonymous”, and the name is dropped before the letter is sealed so it is never stored',
+      'Vercel Web Analytics: real page views and visitors on the live site, plus letter_created and letter_opened events',
+    ],
+    ui: [
+      'Sticker studio is dynamic: “Placed items” lists every sticker, stamp, photo and signature by page, ‹ › steps through them, and picking one jumps to its page and its settings',
+      'Step 4 is shorter: mailbox, cat and bird colours now live behind the card modals instead of long swatch and coat grids, and the birthday row shows a live dot of the chosen cake colour',
+      'Gentle motion: modals fade in and rise (or slide up as a sheet on phones), the menu slides in from the right, admin tabs and editor steps cross-fade softly, and everything stays still for reduced-motion visitors',
+      'Simpler navigation: Home, Write a letter and Updates sit in the header on wider screens, and phones get one menu button that opens a slide-over with the same links, Admin portal and the appearance modes',
+      'The time-lock countdown moved into the header as a slim strip with a live timer, and it recolours to match Afternoon, Dawn or Dusk',
+      'Admin dashboard has a Vercel Analytics card: 30-day and 7-day page views and visitors with a refresh button, plus setup steps when it is not connected yet',
+    ],
+    fixes: [
+      'Modals and the floating preview no longer land below the fold: they render at the document root, so they stay fixed to the screen while the page scrolls',
+      'The header (and the sticky preview column) now actually stay put while scrolling — horizontal overflow clipping no longer turns the body into a scroll container',
+      'On desktop the floating preview docks bottom-left and the sticky preview clears the taller header, so nothing covers the live letter',
+      'Cake colours survive the link: the colour travels inside the delivery id, is validated on open, and unknown values fall back to the classic cake',
+      'Step 1 no longer shows a second copy of the time-lock notice, and the admin analytics card says “Not connected yet” instead of failing when the backend is absent',
+    ],
+  },
+  {
+    id: 'log-v1-4-0',
+    version: 'v1.4.0',
+    date: 'December 20, 2026',
+    title: 'Design Gallery, Floating Preview & Draggable Photos',
+    features: [
+      'Design Gallery: templates, gradient palettes and handwriting fonts show three picks inline, and a “···” button opens the full collection beside a live letter preview',
+      'Floating Letter Preview: a small live window of the letter stays on screen while you write and edit on phones and tablets',
+      'Photos & Signatures On The Letter: upload one or several pictures, or a picture of your signature, in Step 3 and drag them anywhere on the page like a sticker',
+      'Passcode Notes: add an optional note that appears on your recipient’s passcode screen as a gentle hint, and it is shown with the letter even when there is no passcode at all',
+      'Compact editor: Steps 2 to 4 keep only the quick picks, and every full collection opens in a “···” modal — including the new sticker studio for emojis, stamps, photos and signatures',
+      'Delivery modal: delivery time, secret passcode and note now live behind one Continue button, so Step 4 stays short',
+    ],
+    ui: [
+      'Sticker settings rebuilt: a size slider replaces the smaller/bigger buttons, “+” adds another copy of the same sticker or stamp, and “−” removes it',
+      'Picture upload moved from Step 2 into Step 3, next to emojis, stamps and signatures',
+      'The floating preview grows into a readable live letter on hover, so desktop writers get it too',
+      'Release notes are now editable in the admin panel, so earlier entries can be corrected or extended in place',
+    ],
+    fixes: [
+      'Touch dragging for stickers and stamps no longer stutters on phones and tablets — movement updates once per animation frame instead of on every pointer event',
+      'A note is saved and shown with the letter even when the letter is sent without a passcode',
+    ],
+  },
+  {
+    id: 'log-v1-3-2',
+    version: 'v1.3.2',
+    date: 'December 15, 2026',
+    title: 'Snowman Delivery & Refined Cat and Bird Animations',
+    features: [
+      'Snowman Delivery: a limited seasonal presentation where a snowman holds your letter, the envelope opens in a swirl of snow, and the letter floats out',
+      'Limited Time Only: the snowman can be chosen for 15 days only, December 15 to December 29, 2026 — letters already sent with it still open afterwards',
+    ],
+    ui: [
+      'Cat delivery animation refined: gentle breathing, occasional head tilt and ear twitch, paws squeezing the envelope, a happy wiggle when the letter is revealed, and a hop as the letter floats away',
+      'Bird delivery animation refined: head bobbing, tail flicks, a softer wing beat while the letter is open, and speed lines trailing the bird as it flies away',
+      'Snowman scene softened: a calmer snowfall, a warmer scarf, and a letter that glides out of the envelope instead of jumping',
+      'Winter palette tuned across the delivery screens so the snowman, snowflakes and the letter paper read clearly together',
+    ],
+    fixes: [
+      'Stickers no longer slip under the handwriting — they now stack above the letter text on every page',
+      'Snowman delivery no longer re-runs its opening animation when the recipient switches letter pages',
+      'Cat and bird animations stay in place on small screens instead of hopping when the address bar hides',
+      'Page-turn animation is skipped for readers who prefer reduced motion',
+    ],
+  },
+  {
     id: 'log-v1-3-1',
     version: 'v1.3.1',
     date: 'November 28, 2026',
@@ -304,14 +397,37 @@ export function getUpdateLogs() {
     if (!raw) return DEFAULT_UPDATE_LOGS;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_UPDATE_LOGS;
-    const knownVersions = new Set(parsed.map((l) => l.version || l.id));
-    const missing = DEFAULT_UPDATE_LOGS.filter((l) => !knownVersions.has(l.version) && !knownVersions.has(l.id));
+
+    // Built-in entries that nobody has edited pick up the latest shipped wording;
+    // entries edited (or created) in the admin panel keep exactly what was saved.
+    const defaults = new Map(DEFAULT_UPDATE_LOGS.map((l) => [l.id, l]));
+    let changed = false;
+    const refreshed = parsed.map((l) => {
+      const latest = defaults.get(l.id);
+      if (latest && !l.edited) {
+        changed = true;
+        return { ...latest };
+      }
+      return l;
+    });
+
+    // Track both id and version so a log whose version was edited is not re-added as "missing".
+    const known = new Set();
+    refreshed.forEach((l) => {
+      if (l.version) known.add(l.version);
+      if (l.id) known.add(l.id);
+    });
+    const missing = DEFAULT_UPDATE_LOGS.filter((l) => !known.has(l.version) && !known.has(l.id));
     if (missing.length > 0) {
-      const merged = [...missing, ...parsed];
+      const merged = [...missing, ...refreshed];
       local.setItem(LOGS_KEY, JSON.stringify(merged));
       return merged;
     }
-    return parsed;
+    if (changed) {
+      local.setItem(LOGS_KEY, JSON.stringify(refreshed));
+      return refreshed;
+    }
+    return refreshed;
   } catch {
     return DEFAULT_UPDATE_LOGS;
   }

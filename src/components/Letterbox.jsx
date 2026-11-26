@@ -1,14 +1,19 @@
-import { boxColors, DEFAULT_BOX } from '../lib/themes.js';
+import { boxColors, DEFAULT_BOX, isCakeBox } from '../lib/themes.js';
 import CatDelivery from './CatDelivery.jsx';
 import BirdDelivery from './BirdDelivery.jsx';
 import CakeDelivery from './CakeDelivery.jsx';
+import SnowmanDelivery from './SnowmanDelivery.jsx';
 
 // A letterbox/delivery presentation that opens. `stage` drives the animation:
 // closed -> opening -> open (letter visible) -> emerge (letter slides out).
 // Supports the classic mailbox, animated Cat holding a letter, and Messenger Bird that flies away!
 export default function Letterbox({ color = DEFAULT_BOX, stage = 'closed', onOpen, small = false, className = '' }) {
-  if (color === 'cake') {
-    return <CakeDelivery stage={stage} onOpen={onOpen} small={small} className={className} />;
+  if (isCakeBox(color)) {
+    return <CakeDelivery color={color} stage={stage} onOpen={onOpen} small={small} className={className} />;
+  }
+
+  if (color === 'snowman') {
+    return <SnowmanDelivery stage={stage} onOpen={onOpen} small={small} className={className} />;
   }
 
   if (typeof color === 'string' && color.startsWith('bird')) {

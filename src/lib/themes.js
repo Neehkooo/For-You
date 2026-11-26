@@ -121,6 +121,44 @@ export const DEFAULT_BOX = 'red';
 // Birthday letters are delivered as a cake that is sliced open.
 export const BIRTHDAY_BOX = 'cake';
 
+// Seasonal snowman delivery (limited to its December window when choosing).
+export const SNOWMAN_BOX = 'snowman';
+
+// Cake colours. The chosen one is encoded in the box id (`cake_vanilla`, `cake_1a2b3c`),
+// so it travels with the presentation in both short and long links.
+export const cakeColors = [
+  { id: 'strawberry', name: 'Strawberry', frosting: '#facdd9', mid: '#f4b9c9', base: '#eea3b7', drip: '#fffaf7' },
+  { id: 'vanilla',    name: 'Vanilla',    frosting: '#fdf1cf', mid: '#f6e0a8', base: '#e7c882', drip: '#fffdf6' },
+  { id: 'chocolate',  name: 'Chocolate',  frosting: '#d3a17c', mid: '#ad7048', base: '#7d4527', drip: '#f2ddc8' },
+  { id: 'redvelvet',  name: 'Red Velvet', frosting: '#f7dbd9', mid: '#dd918c', base: '#b65752', drip: '#fff8f6' },
+  { id: 'lemon',      name: 'Lemon',      frosting: '#fdf4bd', mid: '#f6e17c', base: '#e2c545', drip: '#fffdf0' },
+  { id: 'matcha',     name: 'Matcha',     frosting: '#e2eecb', mid: '#bcd694', base: '#8bab5f', drip: '#fbfff3' },
+  { id: 'blueberry',  name: 'Blueberry',  frosting: '#d3daf7', mid: '#a9b6e9', base: '#7c8bcb', drip: '#f7f8ff' },
+  { id: 'lavender',   name: 'Lavender',   frosting: '#e9dcf8', mid: '#cdb4ec', base: '#a98cd4', drip: '#fbf7ff' },
+];
+export const DEFAULT_CAKE = 'strawberry';
+
+export const isCakeBox = (id) =>
+  typeof id === 'string' && (id === BIRTHDAY_BOX || id.startsWith('cake_'));
+
+export function getCakePalette(id) {
+  const key = isCakeBox(id) && id.startsWith('cake_') ? id.slice(5) : DEFAULT_CAKE;
+  const preset = cakeColors.find((c) => c.id === key);
+  if (preset) return preset;
+  if (/^[0-9a-fA-F]{6}$/.test(key)) {
+    const hex = '#' + key.toLowerCase();
+    return {
+      id: 'custom',
+      name: 'Custom',
+      frosting: `color-mix(in oklab, ${hex} 42%, white)`,
+      mid: `color-mix(in oklab, ${hex} 78%, white)`,
+      base: hex,
+      drip: '#fffaf7',
+    };
+  }
+  return cakeColors[0];
+}
+
 // Cat delivery coat presets and customization (includes calico with black patch on left ear)
 export const catColors = [
   { id: 'cat_orange',  name: 'Ginger Tabby', body: '#f59e0b', shade: '#b45309', belly: '#fef3c7', ear: '#fca5a5', nose: '#f43f5e', eyes: '#10b981' },
@@ -225,9 +263,26 @@ export function getBirdPalette(id) {
   return birdColors[0];
 }
 
+export const getSnowmanPalette = () => ({
+  snow: '#f8fbff',
+  shade: '#c7d6e4',
+  mound: '#e6eef7',
+  coal: '#26313d',
+  branch: '#8b5a2b',
+  hat: '#2f3a47',
+  hatShade: '#1b232c',
+  ribbon: '#b91c1c',
+  scarf: '#dc2626',
+  scarfShade: '#991b1b',
+});
+
 export const resolveBox = (id) => {
   if (typeof id !== 'string') return DEFAULT_BOX;
-  if (id === BIRTHDAY_BOX) return BIRTHDAY_BOX;
+  if (isCakeBox(id)) {
+    const key = id.slice(5);
+    return cakeColors.some((c) => c.id === key) || /^[0-9a-fA-F]{6}$/.test(key) ? id.toLowerCase() : BIRTHDAY_BOX;
+  }
+  if (id === SNOWMAN_BOX) return SNOWMAN_BOX;
   if (boxColors.some((b) => b.id === id)) return id;
   if (catColors.some((c) => c.id === id)) return id;
   if (birdColors.some((b) => b.id === id)) return id;

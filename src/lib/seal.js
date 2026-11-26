@@ -66,7 +66,11 @@ export function sanitizeLetter(raw) {
   }
 
   const to = typeof raw.to === 'string' ? raw.to.slice(0, 100).replace(/[\u0000-\u001F\u007F-\u009F]/g, '') : '';
-  const from = typeof raw.from === 'string' ? raw.from.slice(0, 100).replace(/[\u0000-\u001F\u007F-\u009F]/g, '') : '';
+  // An anonymous letter never carries the sender's name, even if it was typed before the box was ticked.
+  const anonymousFrom = raw.anonymousFrom === true;
+  const from = !anonymousFrom && typeof raw.from === 'string'
+    ? raw.from.slice(0, 100).replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+    : '';
 
   let rawPages = Array.isArray(raw.pages) ? raw.pages : [raw.body || ''];
   const pages = rawPages
@@ -84,17 +88,24 @@ export function sanitizeLetter(raw) {
   const box = resolveBox(raw.box);
 
   const rawStickers = Array.isArray(raw.stickers) ? raw.stickers : [];
-  const stickers = rawStickers.slice(0, MAX_STICKERS).filter((s) => s && typeof s === 'object').map((s, idx) => ({
-    id: typeof s.id === 'string' && /^[a-zA-Z0-9_-]{1,16}$/.test(s.id) ? s.id : `s_${idx}`,
-    emoji: typeof s.emoji === 'string' ? s.emoji.slice(0, 8) : '❤️',
-    kind: s.kind === 'stamp' ? 'stamp' : 'emoji',
-    stampId: typeof s.stampId === 'string' && /^[a-zA-Z0-9_-]{1,24}$/.test(s.stampId) ? s.stampId : null,
-    page: Number.isInteger(s.page) && s.page >= 0 && s.page < MAX_PAGES ? s.page : 0,
-    x: Number.isFinite(s.x) ? Math.min(98, Math.max(2, s.x)) : 50,
-    y: Number.isFinite(s.y) ? Math.min(98, Math.max(2, s.y)) : 50,
-    size: Number.isFinite(s.size) ? Math.min(150, Math.max(10, s.size)) : 44,
-    rot: Number.isFinite(s.rot) ? Math.min(360, Math.max(-360, s.rot)) : 0,
-  }));
+  const stickers = rawStickers.slice(0, MAX_STICKERS).filter((s) => s && typeof s === 'object').map((s, idx) => {
+    const kind =
+      s.kind === 'stamp' ? 'stamp' : s.kind === 'photo' ? 'photo' : s.kind === 'signature' ? 'signature' : 'emoji';
+    const withPicture = kind === 'photo' || kind === 'signature';
+    return {
+      id: typeof s.id === 'string' && /^[a-zA-Z0-9_-]{1,16}$/.test(s.id) ? s.id : `s_${idx}`,
+      emoji: typeof s.emoji === 'string' ? s.emoji.slice(0, 8) : '❤️',
+      kind,
+      // Uploaded photos and signatures must be inline base64 images (no external tracking URLs).
+      src: withPicture && typeof s.src === 'string' && SAFE_IMAGE_REGEX.test(s.src) ? s.src : null,
+      stampId: typeof s.stampId === 'string' && /^[a-zA-Z0-9_-]{1,24}$/.test(s.stampId) ? s.stampId : null,
+      page: Number.isInteger(s.page) && s.page >= 0 && s.page < MAX_PAGES ? s.page : 0,
+      x: Number.isFinite(s.x) ? Math.min(98, Math.max(2, s.x)) : 50,
+      y: Number.isFinite(s.y) ? Math.min(98, Math.max(2, s.y)) : 50,
+      size: Number.isFinite(s.size) ? Math.min(300, Math.max(10, s.size)) : 44,
+      rot: Number.isFinite(s.rot) ? Math.min(360, Math.max(-360, s.rot)) : 0,
+    };
+  }).filter((s) => (s.kind === 'photo' || s.kind === 'signature' ? !!s.src : true));
 
   // Image must strictly be an inline base64 image data URL (strips external URLs and tracking beacons)
   let image = null;
@@ -116,7 +127,7 @@ export function sanitizeLetter(raw) {
 
   const unlockAt = Number.isFinite(raw.unlockAt) && raw.unlockAt > 0 ? Math.floor(raw.unlockAt) : null;
 
-  return { to, from, pages, theme, font, template, box, stickers, image, music, unlockAt };
+  return { to, from, anonymousFrom, pages, theme, font, template, box, stickers, image, music, unlockAt };
 }
 
 async function deriveKey(pin, salt) {

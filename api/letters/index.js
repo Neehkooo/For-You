@@ -51,7 +51,7 @@ export default async function handler(req, res) {
     // If rate limiting lookup fails, proceed cautiously
   }
 
-  const { token, unlockAt, box, pinLength } = req.body || {};
+  const { token, unlockAt, box, pinLength, pinNote } = req.body || {};
   if (typeof token !== 'string' || token.length < 40 || token.length > MAX_TOKEN || !/^[A-Za-z0-9-]+$/.test(token))
     return res.status(400).json({ error: 'Invalid letter' });
 
@@ -60,7 +60,12 @@ export default async function handler(req, res) {
   const colour = typeof box === 'string' && /^[a-z0-9_]{3,20}$/.test(box) ? box : null;
   // 0 = no passcode, 4 or 6 = digits. null means "unknown" for older letters.
   const pin = pinLength === 0 || pinLength === 4 || pinLength === 6 ? pinLength : null;
-  const value = JSON.stringify({ t: token, u: unlock, b: colour, p: pin });
+  // Optional plaintext hint shown on the passcode screen (never the passcode itself).
+  const note =
+    typeof pinNote === 'string'
+      ? pinNote.trim().slice(0, 140).replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+      : '';
+  const value = JSON.stringify({ t: token, u: unlock, b: colour, p: pin, n: note });
 
   // TTL: at least 2 years, or 1 year after the scheduled unlock time to prevent premature deletion
   const ttlSeconds = unlock

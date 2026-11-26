@@ -1,10 +1,24 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getUpdateLogs } from '../lib/admin.js';
 import { V13_UNLOCK_LABEL, formatRemaining, useV13Unlock } from '../lib/release.js';
 
 export default function UpdateLogsModal({ onClose }) {
   const [logs, setLogs] = useState(getUpdateLogs);
+  const [expandedLogs, setExpandedLogs] = useState(() => {
+    const firstLog = getUpdateLogs()[0];
+    return firstLog ? new Set([firstLog.id || firstLog.version]) : new Set();
+  });
   const { unlocked: v13Unlocked, remaining: v13Remaining } = useV13Unlock();
+
+  const toggleLog = (key) => {
+    setExpandedLogs((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   useEffect(() => {
     const refresh = () => setLogs(getUpdateLogs());
@@ -12,7 +26,7 @@ export default function UpdateLogsModal({ onClose }) {
     return () => window.removeEventListener('for-you-logs-updated', refresh);
   }, []);
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
       onClick={onClose}
@@ -21,7 +35,7 @@ export default function UpdateLogsModal({ onClose }) {
       aria-labelledby="logs-title"
     >
       <div
-        className="flex max-h-[88vh] w-full max-w-2xl flex-col rounded-3xl border border-plum/20 bg-[#fffdfa] shadow-2xl overflow-hidden"
+        className="flex max-h-[88vh] w-full max-w-2xl flex-col rounded-3xl border border-plum/20 bg-[var(--ui-paper)] shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -51,81 +65,107 @@ export default function UpdateLogsModal({ onClose }) {
 
         {/* Scrollable logs list */}
         <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-6 space-y-6 sm:space-y-8">
-          {logs.map((log, index) => (
-            <article
-              key={log.id || log.version || index}
-              className="rounded-2xl border border-plum/15 bg-white/70 p-4 sm:p-6 shadow-xs"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-plum/10 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="rounded-full bg-seal px-3 py-0.5 text-xs font-semibold text-petal">
-                    {log.version}
-                  </span>
-                  {!v13Unlocked && log.version === 'v1.3.0' && (
-                    <span className="rounded-full border border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900">
-                      🔒 Time-locked · unlocks {V13_UNLOCK_LABEL}
+          {logs.map((log, index) => {
+            const logKey = log.id || log.version || index;
+            const expanded = expandedLogs.has(logKey);
+
+            return (
+              <article
+                key={logKey}
+                className="rounded-2xl border border-plum/15 bg-white/70 p-4 sm:p-6 shadow-xs"
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleLog(logKey)}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                  aria-expanded={expanded}
+                  aria-controls={`update-log-${logKey}`}
+                >
+                  <span className="flex min-w-0 flex-wrap items-center gap-2.5">
+                    <span className="rounded-full bg-seal px-3 py-0.5 text-xs font-semibold text-petal">
+                      {log.version}
                     </span>
-                  )}
-                  <h3 className="font-display text-xl font-medium text-plum">{log.title}</h3>
-                </div>
-                <time className="text-xs font-medium text-plum/60">{log.date}</time>
-              </div>
+                    {!v13Unlocked && log.version === 'v1.3.0' && (
+                      <span className="rounded-full border border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900">
+                        🔒 Time-locked · unlocks {V13_UNLOCK_LABEL}
+                      </span>
+                    )}
+                    <span className="font-display text-xl font-medium text-plum">{log.title}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <time className="hidden text-xs font-medium text-plum/60 sm:inline">{log.date}</time>
+                    <span
+                      className="grid h-7 w-7 place-items-center rounded-full border border-plum/15 text-plum/60 transition-transform duration-200"
+                      style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                      aria-hidden="true"
+                    >
+                      ▾
+                    </span>
+                  </span>
+                </button>
 
-              {!v13Unlocked && log.version === 'v1.3.0' && (
-                <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
-                  These features unlock automatically in <strong>{formatRemaining(v13Remaining)}</strong>. Until then the
-                  editor keeps them behind the lock.
-                </p>
-              )}
+                {expanded && (
+                  <div id={`update-log-${logKey}`}>
+                    <time className="mt-3 block text-xs font-medium text-plum/60 sm:hidden">{log.date}</time>
 
-              <div className="mt-4 space-y-4 text-xs sm:text-sm">
-                {/* New Features */}
-                {log.features && log.features.length > 0 && (
-                  <div>
-                    <h4 className="flex items-center gap-1.5 font-semibold text-emerald-800">
-                      <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-                      New Features
-                    </h4>
-                    <ul className="mt-1.5 list-disc pl-5 space-y-1 text-plum/80">
-                      {log.features.map((item, i) => (
-                        <li key={i}>{item}</li>
-                      ))}
-                    </ul>
+                    {!v13Unlocked && log.version === 'v1.3.0' && (
+                      <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
+                        These features unlock automatically in <strong>{formatRemaining(v13Remaining)}</strong>. Until then
+                        the editor keeps them behind the lock.
+                      </p>
+                    )}
+
+                    <div className="mt-4 space-y-4 text-xs sm:text-sm">
+                      {/* New Features */}
+                      {log.features && log.features.length > 0 && (
+                        <div>
+                          <h4 className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                            New Features
+                          </h4>
+                          <ul className="mt-1.5 list-disc pl-5 space-y-1 text-plum/80">
+                            {log.features.map((item, i) => (
+                              <li key={i}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* UI Improvements */}
+                      {log.ui && log.ui.length > 0 && (
+                        <div>
+                          <h4 className="flex items-center gap-1.5 font-semibold text-indigo-800">
+                            <span className="inline-block h-2 w-2 rounded-full bg-indigo-500" />
+                            UI Improvements
+                          </h4>
+                          <ul className="mt-1.5 list-disc pl-5 space-y-1 text-plum/80">
+                            {log.ui.map((item, i) => (
+                              <li key={i}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Bugs Fixed */}
+                      {log.fixes && log.fixes.length > 0 && (
+                        <div>
+                          <h4 className="flex items-center gap-1.5 font-semibold text-rose-800">
+                            <span className="inline-block h-2 w-2 rounded-full bg-rose-500" />
+                            Bugs Fixed
+                          </h4>
+                          <ul className="mt-1.5 list-disc pl-5 space-y-1 text-plum/80">
+                            {log.fixes.map((item, i) => (
+                              <li key={i}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
-
-                {/* UI Improvements */}
-                {log.ui && log.ui.length > 0 && (
-                  <div>
-                    <h4 className="flex items-center gap-1.5 font-semibold text-indigo-800">
-                      <span className="inline-block h-2 w-2 rounded-full bg-indigo-500" />
-                      UI Improvements
-                    </h4>
-                    <ul className="mt-1.5 list-disc pl-5 space-y-1 text-plum/80">
-                      {log.ui.map((item, i) => (
-                        <li key={i}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Bugs Fixed */}
-                {log.fixes && log.fixes.length > 0 && (
-                  <div>
-                    <h4 className="flex items-center gap-1.5 font-semibold text-rose-800">
-                      <span className="inline-block h-2 w-2 rounded-full bg-rose-500" />
-                      Bugs Fixed
-                    </h4>
-                    <ul className="mt-1.5 list-disc pl-5 space-y-1 text-plum/80">
-                      {log.fixes.map((item, i) => (
-                        <li key={i}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
 
         {/* Footer */}
@@ -139,6 +179,7 @@ export default function UpdateLogsModal({ onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

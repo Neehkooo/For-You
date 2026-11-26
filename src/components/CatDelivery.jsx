@@ -1,7 +1,7 @@
 import { getCatPalette } from '../lib/themes.js';
 
 // Animated Cat holding a letter. `stage` drives the animation:
-// closed -> opening (flap swings open, joyful eyes) -> open (letter visible, hearts float) -> emerge (letter slides out).
+// closed -> opening (flap swings open, joyful eyes) -> open (letter visible, hearts float) -> emerge (letter floats away).
 export default function CatDelivery({
   color = 'cat_orange',
   stage = 'closed',
@@ -16,6 +16,12 @@ export default function CatDelivery({
   };
 
   const isSmiling = stage !== 'closed';
+  const uid = String(palette.id || 'cat').replace(/[^a-zA-Z0-9]/g, '');
+  const furGrad = `cat-fur-${uid}`;
+  const bellyGrad = `cat-belly-${uid}`;
+  const envGrad = `cat-env-${uid}`;
+  const waxGrad = `cat-wax-${uid}`;
+  const leftEarFill = palette.leftEar || `url(#${furGrad})`;
 
   return (
     <div
@@ -39,204 +45,296 @@ export default function CatDelivery({
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden="true"
       >
-        {/* Swishing tail */}
+        <defs>
+          <radialGradient id={furGrad} cx="38%" cy="18%" r="92%">
+            <stop offset="0%" stopColor={palette.body} />
+            <stop offset="62%" stopColor={palette.body} />
+            <stop offset="100%" stopColor={palette.shade} stopOpacity="0.55" />
+          </radialGradient>
+          <linearGradient id={bellyGrad} x1="0" y1="0" x2="0.2" y2="1">
+            <stop offset="0%" stopColor={palette.belly} stopOpacity="0.98" />
+            <stop offset="100%" stopColor={palette.belly} stopOpacity="0.55" />
+          </linearGradient>
+          <linearGradient id={envGrad} x1="0.1" y1="0" x2="0.5" y2="1">
+            <stop offset="0%" stopColor="#fffefb" />
+            <stop offset="100%" stopColor="#f4e6d7" />
+          </linearGradient>
+          <linearGradient id={waxGrad} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#d94a3d" />
+            <stop offset="100%" stopColor="#a8281c" />
+          </linearGradient>
+        </defs>
+
+        {/* Soft ground shadow */}
+        <ellipse cx="100" cy="201" rx="58" ry="8" fill={palette.shade} opacity="0.16" />
+
+        {/* Long curling tail */}
+        <g className="cat-tail">
+          <path
+            d="M 134 178 C 166 182, 186 160, 180 134 C 176 115, 160 105, 149 113"
+            fill="none"
+            stroke={palette.shade}
+            strokeOpacity="0.45"
+            strokeWidth="15"
+            strokeLinecap="round"
+          />
+          <path
+            d="M 134 178 C 166 182, 186 160, 180 134 C 176 115, 160 105, 149 113"
+            fill="none"
+            stroke={`url(#${furGrad})`}
+            strokeWidth="11.5"
+            strokeLinecap="round"
+          />
+          <path
+            d="M 152 114 C 162 107, 174 114, 177 130"
+            fill="none"
+            stroke={palette.belly}
+            strokeOpacity="0.3"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+        </g>
+
+        {/* Hind paws */}
+        <ellipse cx="68" cy="187" rx="17" ry="9.5" fill={`url(#${furGrad})`} stroke={palette.shade} strokeOpacity="0.4" strokeWidth="1.4" />
+        <ellipse cx="132" cy="187" rx="17" ry="9.5" fill={`url(#${furGrad})`} stroke={palette.shade} strokeOpacity="0.4" strokeWidth="1.4" />
         <path
-          className="cat-tail"
-          d="M 140 170 C 172 165, 186 132, 172 110 C 163 98, 150 106, 155 119 C 162 134, 150 152, 134 162 Z"
-          fill={palette.body}
+          d="M 60 184 v 4 M 67 182 v 4 M 74 184 v 4 M 126 184 v 4 M 133 182 v 4 M 140 184 v 4"
           stroke={palette.shade}
+          strokeOpacity="0.3"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
+
+        {/* Body */}
+        <path
+          className="cat-body-shape"
+          d="M 100 104 C 75 104, 57 126, 53 157 C 50 180, 63 192, 100 192 C 137 192, 150 180, 147 157 C 143 126, 125 104, 100 104 Z"
+          fill={`url(#${furGrad})`}
+          stroke={palette.shade}
+          strokeOpacity="0.42"
           strokeWidth="1.8"
         />
 
-        {/* Back feet pads */}
-        <ellipse cx="64" cy="192" rx="14" ry="7" fill={palette.points || palette.body} stroke={palette.shade} strokeWidth="1.5" />
-        <ellipse cx="136" cy="192" rx="14" ry="7" fill={palette.points || palette.body} stroke={palette.shade} strokeWidth="1.5" />
-
-        {/* Cat body */}
+        {/* Chest bib */}
         <path
-          d="M 52 185 C 46 128, 68 100, 100 100 C 132 100, 154 128, 148 185 C 148 196, 52 196, 52 185 Z"
-          fill={palette.body}
-          stroke={palette.shade}
-          strokeWidth="2"
+          d="M 100 113 C 87 113, 79 127, 79 147 C 79 167, 87 181, 100 181 C 113 181, 121 167, 121 147 C 121 127, 113 113, 100 113 Z"
+          fill={`url(#${bellyGrad})`}
         />
 
-        {/* Calico body patch if present */}
-        {palette.patch && (
-          <path
-            d="M 125 112 C 144 122, 150 145, 144 168 C 137 152, 132 130, 125 112 Z"
-            fill={palette.patch}
-            opacity="0.9"
-          />
-        )}
-
-        {/* Chest / Belly bib */}
-        <path
-          d="M 78 116 C 78 116, 100 110, 122 116 C 128 142, 122 172, 100 176 C 78 172, 72 142, 78 116 Z"
-          fill={palette.belly}
-        />
-
-        {/* Left ear - has black patch on Calico */}
+        {/* Ears */}
         <g className="cat-ear-left">
           <path
-            d="M 62 66 L 48 24 C 46 20, 52 18, 56 20 L 84 50 Z"
-            fill={palette.leftEar || (palette.patch && palette.id === 'cat_calico' ? palette.patch : (palette.points || palette.body))}
-            stroke={palette.leftEar ? '#111827' : palette.shade}
-            strokeWidth="2"
+            d="M 61 66 C 54 48, 49 29, 57 24 C 64 20, 79 36, 87 51 C 78 56, 69 61, 61 66 Z"
+            fill={leftEarFill}
+            stroke={palette.shade}
+            strokeOpacity="0.4"
+            strokeWidth="1.8"
             strokeLinejoin="round"
           />
-          <path d="M 62 58 L 53 29 L 77 48 Z" fill={palette.ear} />
+          <path
+            d="M 65 59 C 60 47, 57 35, 60 31 C 65 29, 74 41, 80 51 C 74 54, 69 57, 65 59 Z"
+            fill={palette.ear}
+            opacity="0.85"
+          />
         </g>
-
-        {/* Right ear */}
         <g className="cat-ear-right">
           <path
-            d="M 138 66 L 152 24 C 154 20, 148 18, 144 20 L 116 50 Z"
-            fill={palette.points || palette.body}
+            d="M 139 66 C 146 48, 151 29, 143 24 C 136 20, 121 36, 113 51 C 122 56, 131 61, 139 66 Z"
+            fill={`url(#${furGrad})`}
             stroke={palette.shade}
-            strokeWidth="2"
+            strokeOpacity="0.4"
+            strokeWidth="1.8"
             strokeLinejoin="round"
           />
-          <path d="M 138 58 L 147 29 L 123 48 Z" fill={palette.ear} />
+          <path
+            d="M 135 59 C 140 47, 143 35, 140 31 C 135 29, 126 41, 120 51 C 126 54, 131 57, 135 59 Z"
+            fill={palette.ear}
+            opacity="0.85"
+          />
         </g>
 
         {/* Head */}
         <path
-          d="M 54 78 C 50 44, 150 44, 146 78 C 146 112, 54 112, 54 78 Z"
-          fill={palette.body}
+          className="cat-head-shape"
+          d="M 100 46 C 79 46, 59 57, 57 79 C 55 99, 75 112, 100 112 C 125 112, 145 99, 143 79 C 141 57, 121 46, 100 46 Z"
+          fill={`url(#${furGrad})`}
           stroke={palette.shade}
-          strokeWidth="2"
+          strokeOpacity="0.42"
+          strokeWidth="1.8"
         />
 
-        {/* Siamese points mask if present */}
+        {/* Siamese points */}
         {palette.points && (
-          <ellipse cx="100" cy="80" rx="28" ry="22" fill={palette.points} opacity="0.35" />
+          <>
+            <ellipse cx="100" cy="87" rx="26" ry="18" fill={palette.points} opacity="0.26" />
+            <ellipse cx="69" cy="52" rx="11" ry="13" fill={palette.points} opacity="0.22" />
+            <ellipse cx="131" cy="52" rx="11" ry="13" fill={palette.points} opacity="0.22" />
+          </>
         )}
 
-        {/* Calico head patch if present */}
+        {/* Calico head patch */}
         {palette.patch && (
           <path
-            d="M 54 62 C 58 46, 78 45, 84 55 C 78 70, 60 74, 54 62 Z"
+            d="M 58 74 C 60 60, 74 52, 86 56 C 94 59, 97 67, 94 73 C 84 76, 70 78, 58 74 Z"
             fill={palette.patch}
             opacity="0.9"
           />
         )}
 
-        {/* Cheeks blush */}
-        <ellipse cx="70" cy="85" rx="7" ry="4" fill="#fb7185" opacity="0.45" />
-        <ellipse cx="130" cy="85" rx="7" ry="4" fill="#fb7185" opacity="0.45" />
+        {/* Cheek blush */}
+        <ellipse cx="71" cy="91" rx="7.5" ry="4.2" fill="#fb7185" opacity="0.34" />
+        <ellipse cx="129" cy="91" rx="7.5" ry="4.2" fill="#fb7185" opacity="0.34" />
 
         {/* Whiskers */}
-        <line x1="36" y1="81" x2="62" y2="83" stroke={palette.shade} strokeWidth="1.4" strokeLinecap="round" opacity="0.75" />
-        <line x1="36" y1="88" x2="62" y2="87" stroke={palette.shade} strokeWidth="1.4" strokeLinecap="round" opacity="0.75" />
-        <line x1="164" y1="81" x2="138" y2="83" stroke={palette.shade} strokeWidth="1.4" strokeLinecap="round" opacity="0.75" />
-        <line x1="164" y1="88" x2="138" y2="87" stroke={palette.shade} strokeWidth="1.4" strokeLinecap="round" opacity="0.75" />
+        <g stroke={palette.shade} strokeOpacity="0.45" strokeWidth="1.3" strokeLinecap="round" fill="none">
+          <path d="M 73 85 C 61 81, 47 79, 35 81" />
+          <path d="M 73 91 C 61 92, 48 93, 38 97" />
+          <path d="M 127 85 C 139 81, 153 79, 165 81" />
+          <path d="M 127 91 C 139 92, 152 93, 162 97" />
+        </g>
 
-        {/* Nose & Mouth */}
-        <path d="M 97 81 Q 100 79 103 81 Q 100 85 97 81 Z" fill={palette.nose} />
+        {/* Muzzle & nose */}
+        <ellipse cx="92" cy="91" rx="9" ry="6.5" fill={palette.belly} opacity="0.55" />
+        <ellipse cx="108" cy="91" rx="9" ry="6.5" fill={palette.belly} opacity="0.55" />
+        <path d="M 96 84 Q 100 82 104 84 Q 100 90 96 84 Z" fill={palette.nose} />
         <path
-          d="M 94 86 Q 97 89 100 86 Q 103 89 106 86"
-          fill="none"
+          d="M 100 89 C 100 93.5, 96 95.5, 92.5 93.5 M 100 89 C 100 93.5, 104 95.5, 107.5 93.5"
           stroke={palette.shade}
-          strokeWidth="1.6"
+          strokeOpacity="0.5"
+          strokeWidth="1.5"
           strokeLinecap="round"
         />
 
-        {/* Eyes: Blinking anime eyes when closed, joyful curved eyes when open */}
+        {/* Eyes: glossy blinking eyes, then joyful arcs when open */}
         {!isSmiling ? (
           <g className="cat-eyes-group">
-            {/* Left Eye */}
-            <ellipse cx="77" cy="74" rx="6.5" ry="7.5" fill={palette.eyes || '#1e1b18'} />
-            <ellipse cx="77" cy="74" rx="4.5" ry="5.5" fill="#181512" />
-            <circle cx="75" cy="71" r="2.2" fill="#ffffff" />
-            <circle cx="79" cy="76" r="1.1" fill="#ffffff" />
+            <ellipse cx="78" cy="74" rx="7.6" ry="9" fill={palette.eyes} />
+            <ellipse cx="78" cy="75" rx="4.7" ry="6.4" fill="#181512" opacity="0.92" />
+            <circle cx="75.6" cy="70.4" r="2.5" fill="#ffffff" />
+            <circle cx="80.6" cy="78" r="1.2" fill="#ffffff" opacity="0.9" />
+            <path
+              d="M 70.4 68 C 74 64, 82 64, 85.6 68"
+              stroke={palette.shade}
+              strokeOpacity="0.55"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              fill="none"
+            />
 
-            {/* Right Eye */}
-            <ellipse cx="123" cy="74" rx="6.5" ry="7.5" fill={palette.eyes || '#1e1b18'} />
-            <ellipse cx="123" cy="74" rx="4.5" ry="5.5" fill="#181512" />
-            <circle cx="121" cy="71" r="2.2" fill="#ffffff" />
-            <circle cx="125" cy="76" r="1.1" fill="#ffffff" />
+            <ellipse cx="122" cy="74" rx="7.6" ry="9" fill={palette.eyes} />
+            <ellipse cx="122" cy="75" rx="4.7" ry="6.4" fill="#181512" opacity="0.92" />
+            <circle cx="119.6" cy="70.4" r="2.5" fill="#ffffff" />
+            <circle cx="124.6" cy="78" r="1.2" fill="#ffffff" opacity="0.9" />
+            <path
+              d="M 114.4 68 C 118 64, 126 64, 129.6 68"
+              stroke={palette.shade}
+              strokeOpacity="0.55"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              fill="none"
+            />
           </g>
         ) : (
           <g className="cat-eyes-smiling">
-            <path d="M 70 76 Q 77 68 84 76" fill="none" stroke="#2b1a2e" strokeWidth="2.6" strokeLinecap="round" />
-            <path d="M 116 76 Q 123 68 130 76" fill="none" stroke="#2b1a2e" strokeWidth="2.6" strokeLinecap="round" />
+            <path d="M 70 76 Q 78 66.5 86 76" fill="none" stroke="#2b1a2e" strokeWidth="2.8" strokeLinecap="round" />
+            <path d="M 114 76 Q 122 66.5 130 76" fill="none" stroke="#2b1a2e" strokeWidth="2.8" strokeLinecap="round" />
+            <path
+              d="M 67 84 q 3 -3.5 6.5 0 M 126.5 84 q 3 -3.5 6.5 0"
+              fill="none"
+              stroke={palette.shade}
+              strokeOpacity="0.5"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+            />
           </g>
         )}
 
-        {/* Floating hearts (when open or emerge) */}
+        {/* Floating hearts */}
         {isSmiling && (
           <g className="cat-hearts-group">
             <path
               className="cat-heart-1"
-              d="M 98 25 C 95 21, 90 21, 90 25 C 90 29, 98 34, 98 34 C 98 34, 106 29, 106 25 C 106 21, 101 21, 98 25 Z"
+              d="M 98 30 C 95 25.5, 89 25.5, 89 30 C 89 34.5, 98 40, 98 40 C 98 40, 107 34.5, 107 30 C 107 25.5, 101 25.5, 98 30 Z"
               fill="#f43f5e"
+              opacity="0.9"
             />
             <path
               className="cat-heart-2"
-              d="M 126 18 C 124 15, 120 15, 120 18 C 120 21, 126 25, 126 25 C 126 25, 132 21, 132 18 C 132 15, 128 15, 126 18 Z"
+              d="M 128 22 C 126 19, 121.5 19, 121.5 22 C 121.5 25, 128 29, 128 29 C 128 29, 134.5 25, 134.5 22 C 134.5 19, 130 19, 128 22 Z"
               fill="#fb7185"
+              opacity="0.85"
             />
           </g>
         )}
 
-        {/* Envelope back */}
-        <rect x="60" y="116" width="80" height="52" rx="4" fill="#fffdfa" stroke="#d5b8a5" strokeWidth="1.5" />
+        {/* Envelope */}
+        <rect x="56" y="116" width="88" height="54" rx="6" fill={`url(#${envGrad})`} stroke="#d8c3ae" strokeWidth="1.4" />
+        <rect x="60" y="120" width="80" height="46" rx="4" fill="#fffdf9" stroke="#eedfd0" strokeWidth="1" />
 
-        {/* The Letter inside (slides up during emerge) */}
         <g className="cat-letter-paper">
-          <rect x="64" y="120" width="72" height="44" rx="3" fill="#fefcf8" stroke="#ebd8c8" strokeWidth="1" />
-          <line x1="72" y1="130" x2="114" y2="130" stroke="#8c6a78" strokeWidth="2" strokeLinecap="round" opacity="0.4" />
-          <line x1="72" y1="137" x2="128" y2="137" stroke="#8c6a78" strokeWidth="2" strokeLinecap="round" opacity="0.3" />
-          <line x1="72" y1="144" x2="108" y2="144" stroke="#8c6a78" strokeWidth="2" strokeLinecap="round" opacity="0.3" />
+          <rect x="63" y="123" width="74" height="41" rx="3" fill="#fffefb" stroke="#f0e3d4" strokeWidth="1" />
+          <path
+            d="M 71 133 h 44 M 71 140 h 58 M 71 147 h 40"
+            stroke="#8c6a78"
+            strokeWidth="2"
+            strokeLinecap="round"
+            opacity="0.26"
+          />
         </g>
 
-        {/* Envelope front fold pocket */}
-        <path d="M 60 168 L 100 138 L 140 168 Z" fill="#faf2e7" stroke="#d5b8a5" strokeWidth="1" />
-        <path d="M 60 116 L 100 144 L 60 168 Z" fill="#f8ede0" stroke="#d5b8a5" strokeWidth="0.8" opacity="0.75" />
-        <path d="M 140 116 L 100 144 L 140 168 Z" fill="#f8ede0" stroke="#d5b8a5" strokeWidth="0.8" opacity="0.75" />
+        <path d="M 56 170 L 100 141 L 144 170 Z" fill="#f8efe4" stroke="#d8c3ae" strokeWidth="1.1" />
+        <path d="M 56 116 L 100 145 L 56 170 Z" fill="#fbf4ea" stroke="#e2d1bf" strokeWidth="0.9" opacity="0.9" />
+        <path d="M 144 116 L 100 145 L 144 170 Z" fill="#fbf4ea" stroke="#e2d1bf" strokeWidth="0.9" opacity="0.9" />
 
-        {/* Envelope top flap */}
         <g className="cat-flap-group">
-          <path d="M 60 116 L 100 144 L 140 116 Z" fill="#fffaf2" stroke="#d5b8a5" strokeWidth="1.2" />
-          {/* Wax Heart Seal */}
+          <path d="M 56 116 L 100 146 L 144 116 Z" fill="#fffcf5" stroke="#d8c3ae" strokeWidth="1.3" />
           <path
-            className="cat-wax-seal"
-            d="M 100 141 C 97.5 137.5, 93 137.5, 93 141 C 93 144.5, 100 149, 100 149 C 100 149, 107 144.5, 107 141 C 107 137.5, 102.5 137.5, 100 141 Z"
-            fill="#c0392b"
-            stroke="#7e2318"
-            strokeWidth="0.5"
+            d="M 100 146 C 96.5 141, 90 141, 90 146 C 90 151, 100 157, 100 157 C 100 157, 110 151, 110 146 C 110 141, 103.5 141, 100 146 Z"
+            fill={`url(#${waxGrad})`}
+            stroke="#8c2417"
+            strokeWidth="0.6"
           />
         </g>
 
         {/* Paws holding the envelope */}
         <g className="cat-paws-group">
-          {/* Left paw */}
           <ellipse
             cx="66"
-            cy="122"
-            rx="9"
-            ry="7"
-            fill={palette.points || palette.body}
+            cy="127"
+            rx="11"
+            ry="8"
+            fill={`url(#${furGrad})`}
             stroke={palette.shade}
-            strokeWidth="1.5"
-            transform="rotate(-15 66 122)"
+            strokeOpacity="0.4"
+            strokeWidth="1.4"
+            transform="rotate(-12 66 127)"
           />
-          <circle cx="63" cy="121" r="1.2" fill={palette.shade} opacity="0.35" />
-          <circle cx="67" cy="120" r="1.2" fill={palette.shade} opacity="0.35" />
-
-          {/* Right paw */}
+          <path
+            d="M 61 123 v 3.5 M 66 122 v 3.5 M 71 123 v 3.5"
+            stroke={palette.shade}
+            strokeOpacity="0.28"
+            strokeWidth="1.1"
+            strokeLinecap="round"
+          />
           <ellipse
             cx="134"
-            cy="122"
-            rx="9"
-            ry="7"
-            fill={palette.points || palette.body}
+            cy="127"
+            rx="11"
+            ry="8"
+            fill={`url(#${furGrad})`}
             stroke={palette.shade}
-            strokeWidth="1.5"
-            transform="rotate(15 134 122)"
+            strokeOpacity="0.4"
+            strokeWidth="1.4"
+            transform="rotate(12 134 127)"
           />
-          <circle cx="133" cy="120" r="1.2" fill={palette.shade} opacity="0.35" />
-          <circle cx="137" cy="121" r="1.2" fill={palette.shade} opacity="0.35" />
+          <path
+            d="M 129 123 v 3.5 M 134 122 v 3.5 M 139 123 v 3.5"
+            stroke={palette.shade}
+            strokeOpacity="0.28"
+            strokeWidth="1.1"
+            strokeLinecap="round"
+          />
         </g>
       </svg>
     </div>

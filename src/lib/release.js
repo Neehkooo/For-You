@@ -33,6 +33,37 @@ export function formatRemaining(ms) {
   return `${d}d ${pad(h)}h ${pad(m)}m ${pad(s)}s`;
 }
 
+// Snowman delivery: a seasonal presentation that can only be picked for 15 days,
+// starting December 15, 2026 (local midnight). Letters already sent with it still open afterwards.
+export const SNOWMAN_DAYS = 15;
+export const SNOWMAN_START_AT = new Date(2026, 11, 15, 0, 0, 0, 0).getTime();
+export const SNOWMAN_END_AT = SNOWMAN_START_AT + SNOWMAN_DAYS * 24 * 60 * 60 * 1000;
+export const SNOWMAN_START_LABEL = new Date(SNOWMAN_START_AT).toLocaleDateString(undefined, {
+  dateStyle: 'long',
+});
+export const SNOWMAN_END_LABEL = new Date(SNOWMAN_END_AT - 1).toLocaleDateString(undefined, {
+  dateStyle: 'long',
+});
+
+export const isSnowmanAvailable = (now = Date.now()) => now >= SNOWMAN_START_AT && now < SNOWMAN_END_AT;
+
+// Ticks once per second while the snowman is still unavailable.
+export function useSnowmanWindow() {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (isSnowmanAvailable()) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return {
+    available: isSnowmanAvailable(now),
+    before: now < SNOWMAN_START_AT,
+    remaining: now < SNOWMAN_START_AT ? SNOWMAN_START_AT - now : Math.max(0, SNOWMAN_END_AT - now),
+  };
+}
+
 // Ticks once per second while the release is still locked.
 export function useV13Unlock() {
   const [now, setNow] = useState(() => Date.now());

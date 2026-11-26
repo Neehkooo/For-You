@@ -11,7 +11,9 @@ const ANIM_PAPERS = {
   anim_snow: ['❄️', '❅', '❆', '✻'],
 };
 
-// Renders the paper. With `editable`, stickers & stamps can be dragged (pointer or arrow keys).
+// Renders the paper. With `editable`, stickers, stamps, photos and signatures can be dragged
+// (pointer or arrow keys). Dragging is throttled to one state update per animation frame so
+// touch screens stay smooth while a finger swipes an item across the page.
 export default function Letter({
   letter,
   page = 0,
@@ -24,7 +26,7 @@ export default function Letter({
   onStickerRemove,
 }) {
   const paper = useRef(null);
-  const dragging = useRef(null);
+  const drag = useRef(null);
   const theme = resolveTheme(letter.theme);
   const font = fonts.find((f) => f.id === letter.font) || fonts[0];
   const template = letter.template || 'plain';
@@ -54,21 +56,57 @@ export default function Letter({
         }
       : undefined;
 
-  const down = (e, s) => {
+  const applyDrag = (d) => {
+    d.dirty = false;
+    d.raf = 0;
+    onStickerChange?.(d.id, {
+      x: clamp(((d.last.x - d.rect.left) / d.rect.width) * 100),
+      y: clamp(((d.last.y - d.rect.top) / d.rect.height) * 100),
+    });
+  };
+
+  // Ending a drag always flushes the last position, even if a frame was skipped.
+  const endDrag = () => {
+    const d = drag.current;
+    if (!d) return;
+    if (d.raf) cancelAnimationFrame(d.raf);
+    if (d.dirty) applyDrag(d);
+    drag.current = null;
+  };
+
+  const beginDrag = (e, s) => {
     if (!editable) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    dragging.current = s.id;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* older browsers */
+    }
+    // Measure the paper once per drag instead of on every pointer move.
+    const rect = paper.current?.getBoundingClientRect();
+    if (!rect) return;
+    drag.current = {
+      id: s.id,
+      rect,
+      pointerId: e.pointerId,
+      raf: 0,
+      dirty: false,
+      last: { x: e.clientX, y: e.clientY },
+    };
     onSelect?.(s.id);
   };
 
-  const move = (e) => {
-    if (dragging.current == null) return;
-    const r = paper.current.getBoundingClientRect();
-    onStickerChange?.(dragging.current, {
-      x: clamp(((e.clientX - r.left) / r.width) * 100),
-      y: clamp(((e.clientY - r.top) / r.height) * 100),
+  const moveDrag = (e) => {
+    const d = drag.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    d.last = { x: e.clientX, y: e.clientY };
+    d.dirty = true;
+    if (d.raf) return;
+    d.raf = requestAnimationFrame(() => {
+      const st = drag.current;
+      if (st) applyDrag(st);
     });
   };
 
@@ -181,18 +219,26 @@ export default function Letter({
         <p className={`whitespace-pre-wrap break-words ${body ? '' : 'opacity-50'}`}>
           {body || 'Your words will appear here…'}
         </p>
-        {isLast && letter.from && (
+        {isLast && (letter.from || letter.anonymousFrom) && (
           <p className="mt-[1.5em] text-right">
             Yours,
             <br />
-            {letter.from}
+            {letter.anonymousFrom ? 'Anonymous' : letter.from}
           </p>
         )}
       </div>
 
       {stickers.map((s) => {
         const isStamp = s.kind === 'stamp' || !!s.stampId;
+        const isPicture = s.kind === 'photo' || s.kind === 'signature';
         const stampDef = isStamp ? postalStamps.find((p) => p.id === s.stampId) : null;
+        const label = isPicture
+          ? s.kind === 'signature'
+            ? 'Signature'
+            : 'Picture'
+          : isStamp
+          ? 'Postal Stamp ' + (stampDef?.name || s.emoji)
+          : 'Sticker ' + s.emoji;
 
         return (
           <span
@@ -200,20 +246,19 @@ export default function Letter({
             role={editable ? 'button' : undefined}
             tabIndex={editable ? 0 : undefined}
             aria-label={
-              editable
-                ? `${isStamp ? 'Postal Stamp ' + (stampDef?.name || s.emoji) : 'Sticker ' + s.emoji}. Drag or use arrow keys to move, Delete to remove.`
-                : undefined
+              editable ? `${label}. Drag or use arrow keys to move, Delete to remove.` : undefined
             }
             aria-hidden={editable ? undefined : true}
-            onPointerDown={(e) => down(e, s)}
-            onPointerMove={move}
-            onPointerUp={() => {
-              dragging.current = null;
-            }}
+            onPointerDown={(e) => beginDrag(e, s)}
+            onPointerMove={moveDrag}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            onLostPointerCapture={endDrag}
+            onContextMenu={(e) => editable && e.preventDefault()}
             onFocus={() => editable && onSelect?.(s.id)}
             onKeyDown={(e) => editable && key(e, s)}
             className={`absolute z-10 select-none ${
-              editable ? 'cursor-grab touch-none active:cursor-grabbing' : 'pointer-events-none'
+              editable ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'
             }`}
             style={{
               left: `${s.x}%`,
@@ -222,9 +267,22 @@ export default function Letter({
               transform: `translate(-50%, -50%) rotate(${s.rot || 0}deg)`,
               outline: editable && selectedId === s.id ? `2px dashed ${ink}` : 'none',
               outlineOffset: 4,
+              touchAction: 'none',
             }}
           >
-            {isStamp ? (
+            {isPicture ? (
+              <img
+                src={s.src}
+                alt=""
+                draggable={false}
+                className={
+                  s.kind === 'signature'
+                    ? 'block'
+                    : 'block rounded-sm bg-white p-1 pb-3 shadow-lg ring-1 ring-black/10'
+                }
+                style={{ width: `${s.size}px`, height: 'auto', pointerEvents: 'none' }}
+              />
+            ) : isStamp ? (
               <span
                 className="postal-stamp-wrapper"
                 style={{

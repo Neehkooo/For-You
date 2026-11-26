@@ -9,6 +9,17 @@ export async function compressImage(file, max = 640, quality = 0.72) {
   return canvas.toDataURL('image/jpeg', quality);
 }
 
+// Signatures keep their transparent background, so they are re-encoded as PNG.
+export async function compressSignature(file, max = 680) {
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bmp.width * scale));
+  canvas.height = Math.max(1, Math.round(bmp.height * scale));
+  canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/png');
+}
+
 export const readAsDataURL = (file) =>
   new Promise((resolve, reject) => {
     const r = new FileReader();

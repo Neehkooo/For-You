@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import Letter from '../components/Letter.jsx';
-import PinInput from '../components/PinInput.jsx';
+import DesignGallery from '../components/DesignGallery.jsx';
+import FloatingPreview from '../components/FloatingPreview.jsx';
+import StickerStudio from '../components/StickerStudio.jsx';
+import DeliveryModal from '../components/DeliveryModal.jsx';
+import DeliveryColorModal from '../components/DeliveryColorModal.jsx';
 import {
   themes,
   fonts,
@@ -11,32 +15,36 @@ import {
   MAX_BODY,
   MAX_PAGES,
   getPages,
-  boxColors,
   DEFAULT_BOX,
-  catColors,
   DEFAULT_CAT,
-  getCatPalette,
-  birdColors,
   DEFAULT_BIRD,
-  getBirdPalette,
   BIRTHDAY_BOX,
+  SNOWMAN_BOX,
+  DEFAULT_CAKE,
+  getCakePalette,
+  isCakeBox,
   resolveTheme,
 } from '../lib/themes.js';
 import Letterbox from '../components/Letterbox.jsx';
-import DateTimePicker from '../components/DateTimePicker.jsx';
 import Open from './Open.jsx';
 import { sealLetter } from '../lib/seal.js';
-import { compressImage, readAsDataURL, MAX_AUDIO } from '../lib/media.js';
+import { compressImage, compressSignature, readAsDataURL, MAX_AUDIO } from '../lib/media.js';
 import { saveLetter } from '../lib/api.js';
 import { exportLetterPdf, pdfName, savePdf } from '../lib/pdf.js';
 import { recordLetterCreated, getMaintenance } from '../lib/admin.js';
+import { trackEvent } from '../lib/analytics.js';
 import {
   V13_UNLOCK_LABEL,
   V13_THEME_IDS,
   V13_FONT_IDS,
   V13_TEMPLATE_IDS,
+  SNOWMAN_DAYS,
+  SNOWMAN_START_LABEL,
+  SNOWMAN_END_LABEL,
   formatRemaining,
+  isSnowmanAvailable,
   isV13Unlocked,
+  useSnowmanWindow,
   useV13Unlock,
 } from '../lib/release.js';
 
@@ -53,6 +61,7 @@ const defaultWhen = () => {
 const empty = {
   to: '',
   from: '',
+  anonymousFrom: false,
   pages: [''],
   theme: 'blush',
   font: 'vibes',
@@ -60,6 +69,7 @@ const empty = {
   music: null,
   template: 'plain',
   stickers: [],
+  pinNote: '',
   box: DEFAULT_BOX,
 };
 
@@ -81,12 +91,32 @@ const STEPS = [
   { id: 4, title: 'Delivery & Passcode', short: 'Delivery', icon: '💌' },
 ];
 
+// Step 1 shows three options inline and the rest behind a “···” button.
+// A selected option outside the first three is swapped in so it stays visible.
+const head = (list, activeId, n = 3) => {
+  const out = list.slice(0, n);
+  if (activeId && !out.some((x) => x.id === activeId)) {
+    const act = list.find((x) => x.id === activeId);
+    if (act) out[n - 1] = act;
+  }
+  return out;
+};
+
+// Long links carry the passcode note in their hash prefix (base64url, dots stand in for dashes).
+const encodeNote = (text) => {
+  const bytes = new TextEncoder().encode(text);
+  let bin = '';
+  bytes.forEach((b) => (bin += String.fromCharCode(b)));
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '').replace(/-/g, '.');
+};
+
 export default function Create() {
   const [step, setStep] = useState(1);
   const [letter, setLetter] = useState(empty);
   const [cur, setCur] = useState(0);
   const [pin, setPin] = useState('');
-  const { unlocked: v13Unlocked, remaining: v13Remaining } = useV13Unlock();
+  const { unlocked: v13Unlocked } = useV13Unlock();
+  const snowman = useSnowmanWindow();
   const [pinLength, setPinLength] = useState(() => (isV13Unlocked() ? 6 : 4));
   const [schedule, setSchedule] = useState(false);
   const [when, setWhen] = useState(defaultWhen);
@@ -105,8 +135,11 @@ export default function Create() {
   const [testStage, setTestStage] = useState('closed');
   const [lockedNotice, setLockedNotice] = useState('');
   const [stickerTab, setStickerTab] = useState('emojis'); // 'emojis' | 'stamps'
-
-  const selected = letter.stickers.find((s) => s.id === selectedId);
+  const [pinNote, setPinNote] = useState('');
+  const [gallery, setGallery] = useState(null); // 'template' | 'theme' | 'font'
+  const [studio, setStudio] = useState(false); // step 3 sticker / stamp studio
+  const [colorModal, setColorModal] = useState(null); // 'mailbox' | 'cat' | 'bird' | 'cake'
+  const [deliveryOpen, setDeliveryOpen] = useState(false); // step 4 finish modal
   const pages = getPages(letter);
   const availableTemplates = v13Unlocked
     ? templates.length
@@ -114,7 +147,10 @@ export default function Create() {
   const availableFonts = v13Unlocked ? fonts.length : fonts.filter((f) => !V13_FONT_IDS.has(f.id)).length;
   const isCat = typeof letter.box === 'string' && letter.box.startsWith('cat');
   const isBird = typeof letter.box === 'string' && letter.box.startsWith('bird');
-  const isCake = letter.box === BIRTHDAY_BOX;
+  const isCake = isCakeBox(letter.box);
+  const cakeColorId = isCake && letter.box.startsWith('cake_') ? letter.box.slice(5) : DEFAULT_CAKE;
+  const cakePalette = getCakePalette(isCake ? letter.box : DEFAULT_CAKE);
+  const isSnowman = letter.box === SNOWMAN_BOX;
 
   // ---------- pages ----------
   const setPageText = (text) =>
@@ -177,19 +213,90 @@ export default function Create() {
     setSelectedId(null);
   };
 
+  // “+” in the settings panel: drop another copy of the same sticker / stamp / photo.
+  const duplicateSticker = (id) => {
+    const src = letter.stickers.find((s) => s.id === id);
+    if (!src || letter.stickers.length >= MAX_STICKERS) return;
+    const copy = {
+      ...src,
+      id: Math.random().toString(36).slice(2, 8),
+      x: Math.min(96, src.x + 5),
+      y: Math.min(96, src.y + 5),
+      rot: (src.rot || 0) + 3,
+    };
+    setLetter((l) => ({ ...l, stickers: [...l.stickers, copy] }));
+    setSelectedId(copy.id);
+  };
+
   // ---------- media ----------
-  const pickImage = async (e) => {
+  // Uploaded photos become draggable picture stickers instead of a fixed image on page 1.
+  const addPhotos = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    setMediaError('');
+    const room = MAX_STICKERS - letter.stickers.length;
+    if (room <= 0) return setMediaError(`You can place up to ${MAX_STICKERS} items on a letter.`);
+    const created = [];
+    for (const f of files.slice(0, room)) {
+      if (!f.type.startsWith('image/')) {
+        setMediaError('Choose image files (JPG, PNG or WebP).');
+        continue;
+      }
+      if (f.size > 20 * 1024 * 1024) {
+        setMediaError('Choose pictures under 20 MB each.');
+        continue;
+      }
+      try {
+        const src = await compressImage(f, 560, 0.8);
+        created.push({
+          id: Math.random().toString(36).slice(2, 8),
+          kind: 'photo',
+          src,
+          emoji: '🖼️',
+          page: cur,
+          x: 32 + Math.random() * 36,
+          y: 30 + Math.random() * 40,
+          size: 150,
+          rot: Math.round((Math.random() - 0.5) * 8),
+        });
+      } catch {
+        setMediaError('One of those pictures couldn’t be read. Try a JPG or PNG.');
+      }
+    }
+    if (!created.length) return;
+    setLetter((l) => ({ ...l, stickers: [...l.stickers, ...created] }));
+    setSelectedId(created[created.length - 1].id);
+  };
+
+  // Signatures keep transparency (PNG) and land in the signing corner, ready to drag.
+  const addSignature = async (e) => {
     const f = e.target.files?.[0];
     e.target.value = '';
     if (!f) return;
     setMediaError('');
-    if (!f.type.startsWith('image/')) return setMediaError('Choose an image file (e.g. JPG, PNG, WebP).');
-    if (f.size > 20 * 1024 * 1024) return setMediaError('Choose an image file under 20 MB.');
+    if (!f.type.startsWith('image/'))
+      return setMediaError('Upload a picture of your signature (PNG works best).');
+    if (letter.stickers.length >= MAX_STICKERS)
+      return setMediaError(`You can place up to ${MAX_STICKERS} items on a letter.`);
     try {
-      const image = await compressImage(f);
-      setLetter((l) => ({ ...l, image }));
+      const src = await compressSignature(f, 680);
+      const id = Math.random().toString(36).slice(2, 8);
+      const s = {
+        id,
+        kind: 'signature',
+        src,
+        emoji: '✍️',
+        page: cur,
+        x: 66,
+        y: 84,
+        size: 170,
+        rot: -2,
+      };
+      setLetter((l) => ({ ...l, stickers: [...l.stickers, s] }));
+      setSelectedId(id);
     } catch {
-      setMediaError('That picture couldn’t be read. Try a JPG or PNG.');
+      setMediaError('That signature couldn’t be read. Try a PNG with a transparent background.');
     }
   };
 
@@ -214,38 +321,29 @@ export default function Create() {
       if (!isCat) setLetter((l) => ({ ...l, box: DEFAULT_CAT }));
     } else if (type === 'bird') {
       if (!isBird) setLetter((l) => ({ ...l, box: DEFAULT_BIRD }));
+    } else if (type === 'snowman') {
+      if (!isSnowman) setLetter((l) => ({ ...l, box: SNOWMAN_BOX }));
     } else {
-      if (isCat || isBird || isCake) setLetter((l) => ({ ...l, box: DEFAULT_BOX }));
+      if (isCat || isBird || isCake || isSnowman) setLetter((l) => ({ ...l, box: DEFAULT_BOX }));
     }
   };
 
   const setBirthday = (on) => {
     setTestStage('closed');
-    setLetter((l) => ({ ...l, box: on ? BIRTHDAY_BOX : DEFAULT_BOX }));
+    setLetter((l) => ({
+      ...l,
+      box: on ? (isCakeBox(l.box) ? l.box : BIRTHDAY_BOX) : DEFAULT_BOX,
+    }));
   };
 
-  const currentCatHex = (() => {
-    if (!isCat) return '#f59e0b';
-    if (/^cat_[0-9a-fA-F]{6}$/.test(letter.box)) {
-      return '#' + letter.box.slice(4);
-    }
-    const pal = getCatPalette(letter.box);
-    return pal.customHex || pal.body || '#f59e0b';
-  })();
+  const setCakeColor = (id) => {
+    setLetter((l) => ({ ...l, box: `cake_${String(id).replace('#', '').toLowerCase()}` }));
+  };
 
   const setCustomCatColor = (hex) => {
     const clean = hex.replace('#', '').toLowerCase();
     setLetter((l) => ({ ...l, box: `cat_${clean}` }));
   };
-
-  const currentBirdHex = (() => {
-    if (!isBird) return '#60a5fa';
-    if (/^bird_[0-9a-fA-F]{6}$/.test(letter.box)) {
-      return '#' + letter.box.slice(5);
-    }
-    const pal = getBirdPalette(letter.box);
-    return pal.customHex || pal.body || '#60a5fa';
-  })();
 
   const setCustomBirdColor = (hex) => {
     const clean = hex.replace('#', '').toLowerCase();
@@ -291,12 +389,16 @@ export default function Create() {
     }
     if (!pages.some((p) => p.trim())) {
       setError('Write your letter first.');
+      setDeliveryOpen(false);
       setStep(2);
       return;
     }
     if (!v13Unlocked && typeof letter.box === 'string' && letter.box.startsWith('bird')) {
       return setError(`Bird Messenger delivery unlocks ${V13_UNLOCK_LABEL}. Choose the mailbox or the cat for now.`);
     }
+    if (letter.box === SNOWMAN_BOX && !isSnowmanAvailable())
+      return setError('The snowman delivery is only available during its 15-day December window.');
+
     const effectivePinLength = pinLength === 0 ? 0 : v13Unlocked ? pinLength : 4;
     if (effectivePinLength > 0 && pin.length !== effectivePinLength)
       return setError(`Enter a ${effectivePinLength}-digit passcode.`);
@@ -307,10 +409,16 @@ export default function Create() {
         return setError('Choose a delivery time at least a minute from now.');
     }
     setBusy(true);
+    // The note is offered with or without a passcode.
+    const note = pinNote.trim().slice(0, 140);
     try {
       const token = await sealLetter({ ...letter, pages, unlockAt }, pin);
-      const saved = await saveLetter(token, unlockAt, letter.box, effectivePinLength);
+      const saved = await saveLetter(token, unlockAt, letter.box, effectivePinLength, note);
       recordLetterCreated();
+      trackEvent('letter_created', {
+        delivery: letter.box.startsWith('cake') ? 'cake' : letter.box.split('_')[0],
+        passcode: effectivePinLength === 0 ? 'none' : String(effectivePinLength),
+      });
       setNoPasscode(effectivePinLength === 0);
       if (saved) {
         setLink(`${window.location.origin}/${saved.id}`);
@@ -322,9 +430,10 @@ export default function Create() {
         const prefix = [letter.box, `p${effectivePinLength}`, unlockAt ? `u${unlockAt}` : null]
           .filter(Boolean)
           .join('-');
-        setLink(`${base}#l-${prefix}-${token}`);
+        setLink(`${base}#l-${prefix}-${token}${note ? `-hn${encodeNote(note)}` : ''}`);
         setLinkKind(unlockAt ? 'scheduled-long' : 'long');
       }
+      setDeliveryOpen(false);
     } catch {
       setError('Something went wrong creating the letter. Try again.');
     }
@@ -355,6 +464,7 @@ export default function Create() {
     setLetter(empty);
     setCur(0);
     setPin('');
+    setPinNote('');
     setPinLength(isV13Unlocked() ? 6 : 4);
     setLink('');
     setStorageMissing(false);
@@ -364,6 +474,8 @@ export default function Create() {
     setWhen(defaultWhen());
     setStep(1);
     setPreviewTab('letter');
+    setDeliveryOpen(false);
+    setStudio(false);
   };
 
   // Opening a long link inside the editor avoids navigating the page
@@ -378,6 +490,8 @@ export default function Create() {
             <p className="mt-3 text-plum/75">
               {linkKind.startsWith('scheduled')
                 ? `It will open on ${new Date(when).toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' })}. Until then the reader sees only a countdown.`
+                : noPasscode
+                ? 'Share this link. It opens straight away — no passcode needed.'
                 : 'Share this link. The reader will need your passcode to open it.'}
             </p>
             <input
@@ -477,17 +591,6 @@ export default function Create() {
               </nav>
             </div>
 
-            {/* v1.3 time lock */}
-            {!v13Unlocked && (
-              <div className="rounded-xl border border-amber-300 bg-amber-50/90 px-3 py-2 text-[11px] leading-snug text-amber-900 shadow-xs">
-                <p className="font-semibold">🔒 v1.3 features are time-locked</p>
-                <p className="mt-0.5 text-[11px]">
-                  Unlocks <strong>{V13_UNLOCK_LABEL}</strong> — in{' '}
-                  <span className="font-mono font-semibold">{formatRemaining(v13Remaining)}</span>
-                </p>
-              </div>
-            )}
-
             {lockedNotice && (
               <div className="flex items-center justify-between rounded-xl border border-amber-300 bg-amber-50/90 px-4 py-2.5 text-xs text-amber-900 shadow-xs">
                 <span className="flex items-center gap-1.5">
@@ -507,7 +610,7 @@ export default function Create() {
 
             {/* STEP 1: Letter Design */}
             {step === 1 && (
-              <div className="space-y-6">
+              <div className="step-in space-y-6">
                 <div>
                   <h1 className="font-display text-2xl font-light sm:text-3xl lg:text-4xl">Step 1 · Letter Design</h1>
                   <p className="mt-1 text-sm text-plum/70">
@@ -518,10 +621,12 @@ export default function Create() {
                 <fieldset>
                   <div className="flex items-center justify-between mb-2">
                     <legend className="text-sm font-medium text-plum">Template Style</legend>
-                    <span className="text-xs text-plum/60">{availableTemplates} stationery styles</span>
+                    <span className="text-xs text-plum/60">
+                      {availableTemplates} stationery styles · 3 shown
+                    </span>
                   </div>
-                  <div className="flex flex-wrap gap-2.5">
-                    {templates.map((t) => {
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {head(templates, letter.template).map((t) => {
                       const isSelected = letter.template === t.id;
                       const isLocked = V13_TEMPLATE_IDS.has(t.id) && !v13Unlocked;
                       if (isLocked) {
@@ -564,8 +669,18 @@ export default function Create() {
                         </button>
                       );
                     })}
+                    <button
+                      type="button"
+                      onClick={() => setGallery('template')}
+                      aria-label={`Show all ${templates.length} stationery templates`}
+                      className="flex items-center gap-2 rounded-lg border border-dashed border-plum/35 bg-white/40 px-3.5 py-2 text-sm text-plum/75 transition-all hover:bg-white/70"
+                    >
+                      <span className="tracking-[0.2em]" aria-hidden="true">
+                        ···
+                      </span>
+                      <span className="text-xs font-medium">All {templates.length}</span>
+                    </button>
                   </div>
-
                 </fieldset>
 
                 <fieldset className="space-y-4">
@@ -574,7 +689,7 @@ export default function Create() {
                       Gradient Palettes ({themes.length})
                     </legend>
                     <div className="flex flex-wrap gap-2.5 sm:gap-3">
-                      {themes.map((t) => {
+                      {head(themes, letter.theme).map((t) => {
                         const isLocked = V13_THEME_IDS.has(t.id) && !v13Unlocked;
                         return (
                           <button
@@ -603,6 +718,16 @@ export default function Create() {
                           </button>
                         );
                       })}
+                      <button
+                        type="button"
+                        onClick={() => setGallery('theme')}
+                        aria-label={`Show all ${themes.length} gradient palettes`}
+                        className="grid h-11 w-11 place-items-center rounded-full border border-dashed border-plum/35 bg-white/50 text-plum/70 transition-transform hover:scale-110 hover:bg-white"
+                      >
+                        <span className="text-lg leading-none tracking-tight" aria-hidden="true">
+                          ···
+                        </span>
+                      </button>
                     </div>
                   </div>
 
@@ -669,8 +794,8 @@ export default function Create() {
                     <legend className="text-sm font-medium text-plum">Handwriting Font</legend>
                     <span className="text-xs text-plum/60">{availableFonts} cursive & aesthetic scripts</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                    {fonts.map((f) => {
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                    {head(fonts, letter.font).map((f) => {
                       const isLocked = V13_FONT_IDS.has(f.id) && !v13Unlocked;
                       return (
                         <button
@@ -696,6 +821,17 @@ export default function Create() {
                         </button>
                       );
                     })}
+                    <button
+                      type="button"
+                      onClick={() => setGallery('font')}
+                      aria-label={`Show all ${fonts.length} handwriting fonts`}
+                      className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-plum/35 bg-white/40 px-3 py-2 text-plum/75 transition-all hover:bg-white/70"
+                    >
+                      <span className="text-lg leading-none tracking-tight" aria-hidden="true">
+                        ···
+                      </span>
+                      <span className="text-xs font-medium">All {fonts.length}</span>
+                    </button>
                   </div>
                 </fieldset>
 
@@ -711,17 +847,17 @@ export default function Create() {
               </div>
             )}
 
-            {/* STEP 2: Message & Pictures & Music */}
+            {/* STEP 2: Message & Music */}
             {step === 2 && (
-              <div className="space-y-6">
+              <div className="step-in space-y-4">
                 <div>
-                  <h1 className="font-display text-2xl font-light sm:text-3xl lg:text-4xl">Step 2 · Message & Media</h1>
+                  <h1 className="font-display text-2xl font-light sm:text-3xl">Step 2 · Message &amp; Media</h1>
                   <p className="mt-1 text-sm text-plum/70">
-                    Write heartfelt words, add multiple pages, and attach a cherished photo and song.
+                    Your words, a few pages if you need them, and a song if you like.
                   </p>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block text-sm font-medium text-plum">
                     To
                     <input
@@ -732,16 +868,29 @@ export default function Create() {
                       maxLength={40}
                     />
                   </label>
-                  <label className="block text-sm font-medium text-plum">
-                    From
+                  <div className="block text-sm font-medium text-plum">
+                    <div className="flex items-center justify-between gap-2">
+                      <label htmlFor="from-name">From</label>
+                      <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-plum/65">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(letter.anonymousFrom)}
+                          onChange={(e) => setLetter({ ...letter, anonymousFrom: e.target.checked })}
+                          className="h-3.5 w-3.5 accent-seal"
+                        />
+                        Anonymous
+                      </label>
+                    </div>
                     <input
-                      className="field mt-1.5"
-                      value={letter.from}
+                      id="from-name"
+                      className="field mt-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={letter.anonymousFrom ? '' : letter.from}
                       onChange={(e) => setLetter({ ...letter, from: e.target.value })}
-                      placeholder="Your name"
+                      placeholder={letter.anonymousFrom ? 'Anonymous' : 'Your name'}
                       maxLength={40}
+                      disabled={Boolean(letter.anonymousFrom)}
                     />
-                  </label>
+                  </div>
                 </div>
 
                 <div>
@@ -779,7 +928,7 @@ export default function Create() {
                   </div>
                   <textarea
                     id="msg"
-                    className="field mt-3 min-h-44"
+                    className="field mt-3 min-h-32 max-h-72"
                     value={pages[cur] ?? ''}
                     maxLength={MAX_BODY}
                     onChange={(e) => setPageText(e.target.value)}
@@ -790,27 +939,17 @@ export default function Create() {
                   </span>
                 </div>
 
-                <fieldset>
-                  <legend className="mb-2 text-sm font-medium text-plum">Picture</legend>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <label
-                      className={`${chip} cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-seal`}
-                    >
-                      {letter.image ? 'Change picture' : 'Add a picture'}
-                      <input type="file" accept="image/*" onChange={pickImage} className="sr-only" />
-                    </label>
-                    {letter.image && (
-                      <button
-                        type="button"
-                        onClick={() => setLetter({ ...letter, image: null })}
-                        className="text-sm text-plum/70 hover:text-plum"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                  <p className="mt-2 text-xs text-plum/55">Shown on the first page of your letter.</p>
-                </fieldset>
+                <p className="rounded-lg border border-plum/20 bg-white/40 px-3 py-2 text-[11px] leading-relaxed text-plum/65">
+                  🖼️ Photos and signatures go onto the letter in{' '}
+                  <button
+                    type="button"
+                    onClick={() => setStep(3)}
+                    className="font-semibold text-seal underline underline-offset-2"
+                  >
+                    Step 3
+                  </button>
+                  , where you can drag them anywhere.
+                </p>
 
                 <fieldset>
                   <legend className="mb-2 text-sm font-medium text-plum">Music</legend>
@@ -847,7 +986,7 @@ export default function Create() {
                   )}
                 </fieldset>
 
-                <div className="flex flex-col-reverse gap-2.5 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col-reverse gap-2.5 pt-2 sm:flex-row sm:items-center sm:justify-between">
                   <button
                     type="button"
                     onClick={() => setStep(1)}
@@ -866,179 +1005,134 @@ export default function Create() {
               </div>
             )}
 
-            {/* STEP 3: Emojis and Stickers & Stamps */}
+            {/* STEP 3: Emojis, Stickers, Photos & Signatures */}
             {step === 3 && (
-              <div className="space-y-6">
+              <div className="step-in space-y-4">
                 <div>
-                  <h1 className="font-display text-2xl font-light sm:text-3xl lg:text-4xl">Step 3 · Emojis, Stickers & Stamps</h1>
+                  <h1 className="font-display text-2xl font-light sm:text-3xl">Step 3 · Emojis &amp; Stamps</h1>
                   <p className="mt-1 text-sm text-plum/70">
-                    Add romantic stickers or authentic vintage postal stamps to your pages. Drag and resize them right on the preview.
+                    A few favourites are one tap away. Open the full studio to see everything and fine-tune what you
+                    placed on a live preview.
                   </p>
                 </div>
 
-                <fieldset>
-                  {/* Category Switcher Tab */}
-                  <div className="mb-4 flex w-full flex-col items-stretch gap-2 rounded-xl border border-plum/20 bg-white/40 p-1 sm:w-fit sm:flex-row sm:items-center">
-                    <button
-                      type="button"
-                      onClick={() => setStickerTab('emojis')}
-                      className={`w-full rounded-lg px-4 py-1.5 text-center text-xs font-semibold transition-all sm:w-auto ${
-                        stickerTab === 'emojis'
-                          ? 'bg-seal text-petal shadow-xs'
-                          : 'text-plum/70 hover:bg-white/60'
-                      }`}
-                    >
-                      ✨ Emojis & Stickers ({stickerEmojis.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        v13Unlocked
-                          ? setStickerTab('stamps')
-                          : setLockedNotice(
-                              `The 10 vintage postage stamps arrive with v1.3. They unlock ${V13_UNLOCK_LABEL}.`
-                            )
-                      }
-                      className={`w-full rounded-lg px-4 py-1.5 text-center text-xs font-semibold transition-all sm:w-auto ${
-                        stickerTab === 'stamps'
-                          ? 'bg-seal text-petal shadow-xs'
-                          : 'text-plum/70 hover:bg-white/60'
-                      } ${!v13Unlocked ? 'opacity-60' : ''}`}
-                    >
-                      📮 Vintage Postage Stamps ({postalStamps.length}){!v13Unlocked && ' 🔒'}
-                    </button>
+                <div className="space-y-3 rounded-2xl border border-plum/20 bg-white/40 p-3.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-plum">✨ Stickers</p>
+                    <span className="text-[11px] text-plum/60">
+                      page {cur + 1} · {letter.stickers.length}/{MAX_STICKERS}
+                    </span>
                   </div>
-
-                  {/* Tab 1: Emojis Grid */}
-                  {stickerTab === 'emojis' && (
-                    <div>
-                      <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-8">
-                        {stickerEmojis.map((e) => (
-                          <button
-                            key={e}
-                            type="button"
-                            onClick={() => addSticker(e)}
-                            disabled={letter.stickers.length >= MAX_STICKERS}
-                            aria-label={`Add ${e} sticker`}
-                            className="grid h-12 place-items-center rounded-xl bg-white/30 text-2xl hover:bg-white/70 hover:scale-110 transition-all disabled:opacity-40"
-                          >
-                            {e}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="mt-3 text-xs text-plum/60">
-                        Tap any sticker to place it on page {cur + 1}, then drag it freely on the preview.{' '}
-                        <span className="font-medium text-plum">
-                          {letter.stickers.length}/{MAX_STICKERS}
-                        </span>{' '}
-                        items used.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Tab 2: Authentic Postage Stamps Grid */}
-                  {stickerTab === 'stamps' && !v13Unlocked && (
-                    <p className="rounded-xl border border-amber-300 bg-amber-50/90 px-4 py-3 text-xs text-amber-900">
-                      🔒 The 10 collectible vintage stamps are time-locked with v1.3 and unlock{' '}
-                      <strong>{V13_UNLOCK_LABEL}</strong>.
-                    </p>
-                  )}
-                  {stickerTab === 'stamps' && v13Unlocked && (
-                    <div>
-                      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-5">
-                        {postalStamps.map((s) => (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => addStamp(s)}
-                            disabled={letter.stickers.length >= MAX_STICKERS}
-                            title={`Add ${s.name} stamp to letter`}
-                            className="group relative flex flex-col items-center justify-between rounded-lg border-2 border-dashed p-2 text-center transition-all hover:scale-105 hover:shadow-md disabled:opacity-40"
-                            style={{
-                              borderColor: s.border,
-                              backgroundColor: `${s.color}15`,
-                            }}
-                          >
-                            <span
-                              className="text-[10px] font-mono tracking-widest font-bold uppercase"
-                              style={{ color: s.border }}
-                            >
-                              {s.code}
-                            </span>
-                            <span className="my-1 text-2xl group-hover:scale-110 transition-transform">
-                              {s.symbol}
-                            </span>
-                            <span className="text-[11px] font-medium text-plum truncate max-w-full">
-                              {s.name}
-                            </span>
-                            <span className="text-[9px] text-plum/50 italic tracking-tighter">
-                              {s.postmark}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                      <p className="mt-3 text-xs text-plum/60">
-                        Tap any vintage stamp to adhere it to page {cur + 1} (placed in the classic postal position), then drag or rotate.{' '}
-                        <span className="font-medium text-plum">
-                          {letter.stickers.length}/{MAX_STICKERS}
-                        </span>{' '}
-                        items used.
-                      </p>
-                    </div>
-                  )}
-
-                  {selected && (
-                    <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-plum/20 bg-white/50 p-3 shadow-xs">
-                      <span className="mr-1 text-2xl" aria-hidden="true">
-                        {selected.emoji}
-                      </span>
-                      {selected.kind === 'stamp' && (
-                        <span className="mr-2 rounded bg-seal/10 px-1.5 py-0.5 text-xs font-semibold text-seal">
-                          Postal Stamp
-                        </span>
-                      )}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {stickerEmojis.slice(0, 6).map((e) => (
                       <button
+                        key={e}
                         type="button"
-                        className={chip}
-                        onClick={() => patchSticker(selected.id, { size: Math.max(20, selected.size - 12) })}
+                        onClick={() => addSticker(e)}
+                        disabled={letter.stickers.length >= MAX_STICKERS}
+                        aria-label={`Add ${e} sticker`}
+                        className="grid h-10 w-10 place-items-center rounded-xl bg-white/50 text-xl transition-all hover:scale-110 hover:bg-white disabled:opacity-40"
                       >
-                        Smaller
+                        {e}
                       </button>
-                      <button
-                        type="button"
-                        className={chip}
-                        onClick={() => patchSticker(selected.id, { size: Math.min(120, selected.size + 12) })}
-                      >
-                        Bigger
-                      </button>
-                      <button
-                        type="button"
-                        className={chip}
-                        onClick={() => patchSticker(selected.id, { rot: ((selected.rot || 0) + 15) % 360 })}
-                      >
-                        Rotate
-                      </button>
-                      <button type="button" className={chip} onClick={() => removeSticker(selected.id)}>
-                        Remove
-                      </button>
-                    </div>
-                  )}
-
-                  {letter.stickers.length > 0 && (
+                    ))}
                     <button
                       type="button"
                       onClick={() => {
-                        setLetter({ ...letter, stickers: [] });
-                        setSelectedId(null);
+                        setStickerTab('emojis');
+                        setStudio(true);
                       }}
-                      className="mt-3 text-sm text-plum/70 hover:text-plum underline underline-offset-4"
+                      aria-label={`Show all ${stickerEmojis.length} stickers`}
+                      className="flex items-center gap-2 rounded-xl border border-dashed border-plum/35 bg-white/40 px-3 py-2 text-xs font-medium text-plum/75 transition-all hover:bg-white/70"
                     >
-                      Remove all stickers & stamps
+                      <span className="tracking-[0.2em]" aria-hidden="true">
+                        ···
+                      </span>
+                      All {stickerEmojis.length}
                     </button>
-                  )}
-                </fieldset>
+                  </div>
 
-                <div className="flex flex-col-reverse gap-2.5 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="border-t border-plum/10 pt-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-plum">📮 Vintage stamps</p>
+                      {!v13Unlocked && (
+                        <span className="text-[10px] text-plum/60">🔒 v1.3</span>
+                      )}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {postalStamps.slice(0, 3).map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() =>
+                            v13Unlocked
+                              ? addStamp(s)
+                              : setLockedNotice(
+                                  `The 10 vintage postage stamps arrive with v1.3. They unlock ${V13_UNLOCK_LABEL}.`
+                                )
+                          }
+                          disabled={v13Unlocked && letter.stickers.length >= MAX_STICKERS}
+                          title={s.name}
+                          aria-label={`Add ${s.name} stamp`}
+                          className={`grid h-10 w-10 place-items-center rounded-xl border-2 border-dashed text-lg transition-all hover:scale-110 disabled:opacity-40 ${
+                            v13Unlocked ? '' : 'opacity-50 saturate-50'
+                          }`}
+                          style={{ borderColor: s.border, backgroundColor: `${s.color}15` }}
+                        >
+                          {s.symbol}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          v13Unlocked
+                            ? (setStickerTab('stamps'), setStudio(true))
+                            : setLockedNotice(
+                                `The 10 vintage postage stamps arrive with v1.3. They unlock ${V13_UNLOCK_LABEL}.`
+                              )
+                        }
+                        aria-label={`Show all ${postalStamps.length} vintage stamps`}
+                        className="flex items-center gap-2 rounded-xl border border-dashed border-plum/35 bg-white/40 px-3 py-2 text-xs font-medium text-plum/75 transition-all hover:bg-white/70"
+                      >
+                        <span className="tracking-[0.2em]" aria-hidden="true">
+                          ···
+                        </span>
+                        All {postalStamps.length}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 border-t border-plum/10 pt-3">
+                    <label className={`${chip} cursor-pointer text-xs`}>
+                      🖼️ Add photos
+                      <input type="file" accept="image/*" multiple onChange={addPhotos} className="sr-only" />
+                    </label>
+                    <label className={`${chip} cursor-pointer text-xs`}>
+                      ✍️ Signature
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={addSignature}
+                        className="sr-only"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setStudio(true)}
+                      className="ml-auto rounded-full border border-plum/30 bg-white/60 px-3.5 py-1.5 text-xs font-medium text-plum hover:bg-white"
+                    >
+                      ✎ Edit placed items ({letter.stickers.length})
+                    </button>
+                  </div>
+                  {mediaError && <p className="text-[11px] text-red-700">{mediaError}</p>}
+                </div>
+
+                <div className="rounded-xl border border-plum/20 bg-white/40 px-3.5 py-2.5 text-[11px] leading-relaxed text-plum/65">
+                  Tip: the live preview is draggable as well. The “···” studio holds every sticker and stamp, plus
+                  size, rotate, duplicate and remove controls for anything you added.
+                </div>
+
+                <div className="flex flex-col-reverse gap-2.5 pt-2 sm:flex-row sm:items-center sm:justify-between">
                   <button
                     type="button"
                     onClick={() => setStep(2)}
@@ -1054,7 +1148,7 @@ export default function Create() {
                     }}
                     className="flex w-full items-center justify-center gap-2 rounded-full bg-seal px-7 py-3 font-medium text-petal hover:brightness-110 sm:w-auto"
                   >
-                    Continue to Delivery & Passcode →
+                    Continue to Delivery →
                   </button>
                 </div>
               </div>
@@ -1062,28 +1156,29 @@ export default function Create() {
 
             {/* STEP 4: Delivery Time and Passcode */}
             {step === 4 && (
-              <div className="space-y-6">
+              <div className="step-in space-y-4">
                 <div>
-                  <h1 className="font-display text-2xl font-light sm:text-3xl lg:text-4xl">Step 4 · Delivery & Passcode</h1>
+                  <h1 className="font-display text-2xl font-light sm:text-3xl">Step 4 · Delivery</h1>
                   <p className="mt-1 text-sm text-plum/70">
-                    Choose how your letter is presented, schedule its arrival, and protect it with a secret code.
+                    Pick how it arrives. Delivery time, passcode and note come next.
                   </p>
                 </div>
 
                 {/* Delivery Presentation Style Toggle */}
-                <fieldset className="rounded-2xl border border-plum/20 bg-white/40 p-4">
+                <fieldset className="rounded-2xl border border-plum/20 bg-white/40 p-3.5">
                   <legend className="px-1 text-sm font-semibold text-plum">Delivery Presentation</legend>
                   <p className="mb-3 text-xs text-plum/65">
                     Select how the letter appears to your recipient when they first open your link.
                   </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="relative flex">
                     <button
                       type="button"
                       onClick={() => setDeliveryType('mailbox')}
-                      aria-pressed={!isCat && !isBird && !isCake}
-                      className={`flex items-center justify-center gap-2 rounded-xl border p-3 text-sm font-medium transition-all ${
-                        !isCat && !isBird && !isCake
+                      aria-pressed={!isCat && !isBird && !isCake && !isSnowman}
+                      className={`flex h-full w-full items-center justify-center gap-2 rounded-xl border p-3 pr-6 text-sm font-medium transition-all ${
+                        !isCat && !isBird && !isCake && !isSnowman
                           ? 'border-seal bg-white/80 shadow-xs text-plum'
                           : 'border-plum/20 bg-white/20 text-plum/70 hover:bg-white/50'
                       }`}
@@ -1093,12 +1188,26 @@ export default function Create() {
                       </span>
                       <span>Classic Mailbox</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeliveryType('mailbox');
+                        setColorModal('mailbox');
+                      }}
+                      aria-label="Mailbox colour"
+                      title="Mailbox colour"
+                      className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full border border-plum/15 bg-white/85 text-[10px] leading-none text-plum/65 shadow-xs hover:bg-white hover:text-plum"
+                    >
+                      ···
+                    </button>
+                  </div>
 
+                    <div className="relative flex">
                     <button
                       type="button"
                       onClick={() => setDeliveryType('cat')}
                       aria-pressed={isCat}
-                      className={`flex items-center justify-center gap-2 rounded-xl border p-3 text-sm font-medium transition-all ${
+                      className={`flex h-full w-full items-center justify-center gap-2 rounded-xl border p-3 pr-6 text-sm font-medium transition-all ${
                         isCat
                           ? 'border-seal bg-white/80 shadow-xs text-plum'
                           : 'border-plum/20 bg-white/20 text-plum/70 hover:bg-white/50'
@@ -1109,7 +1218,21 @@ export default function Create() {
                       </span>
                       <span>Cat Delivery</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeliveryType('cat');
+                        setColorModal('cat');
+                      }}
+                      aria-label="Cat coat"
+                      title="Cat coat"
+                      className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full border border-plum/15 bg-white/85 text-[10px] leading-none text-plum/65 shadow-xs hover:bg-white hover:text-plum"
+                    >
+                      ···
+                    </button>
+                  </div>
 
+                    <div className="relative flex">
                     <button
                       type="button"
                       onClick={() =>
@@ -1118,7 +1241,7 @@ export default function Create() {
                           : setLockedNotice(`Bird Messenger delivery arrives with v1.3. It unlocks ${V13_UNLOCK_LABEL}.`)
                       }
                       aria-pressed={isBird}
-                      className={`flex items-center justify-center gap-2 rounded-xl border p-3 text-sm font-medium transition-all ${
+                      className={`flex h-full w-full items-center justify-center gap-2 rounded-xl border p-3 pr-6 text-sm font-medium transition-all ${
                         isBird
                           ? 'border-seal bg-white/80 shadow-xs text-plum'
                           : 'border-plum/20 bg-white/20 text-plum/70 hover:bg-white/50'
@@ -1129,233 +1252,102 @@ export default function Create() {
                       </span>
                       <span>Bird Messenger{!v13Unlocked && ' 🔒'}</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!v13Unlocked) {
+                          setLockedNotice(`Bird Messenger delivery arrives with v1.3. It unlocks ${V13_UNLOCK_LABEL}.`);
+                          return;
+                        }
+                        setDeliveryType('bird');
+                        setColorModal('bird');
+                      }}
+                      aria-label="Bird plumage"
+                      title="Bird plumage"
+                      className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full border border-plum/15 bg-white/85 text-[10px] leading-none text-plum/65 shadow-xs hover:bg-white hover:text-plum"
+                    >
+                      ···
+                    </button>
                   </div>
 
+                    <div className="relative flex">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (snowman.available) {
+                          setDeliveryType('snowman');
+                          return;
+                        }
+                        setLockedNotice(
+                          snowman.before
+                            ? `The Snowman delivery is a limited seasonal presentation. It arrives ${SNOWMAN_START_LABEL} and is only available for ${SNOWMAN_DAYS} days, until ${SNOWMAN_END_LABEL}.`
+                            : `The Snowman delivery has melted away for this season. It comes back next winter.`
+                        );
+                      }}
+                      aria-pressed={isSnowman}
+                      className={`flex h-full w-full items-center justify-center gap-2 rounded-xl border p-3 text-sm font-medium transition-all ${
+                        isSnowman
+                          ? 'border-seal bg-white/80 shadow-xs text-plum'
+                          : 'border-plum/20 bg-white/20 text-plum/70 hover:bg-white/50'
+                      } ${!snowman.available ? 'opacity-55' : ''}`}
+                    >
+                      <span className="text-xl" aria-hidden="true">
+                        ⛄
+                      </span>
+                      <span>Snowman{!snowman.available && ' 🔒'}</span>
+                    </button>
+                  </div>
+                  </div>
+
+                  {/* Snowman limited-time window */}
+                  <p className="mt-2 text-[11px] leading-relaxed text-plum/60">
+                    ⛄ Snowman delivery is a limited seasonal presentation — available {SNOWMAN_START_LABEL} to{' '}
+                    {SNOWMAN_END_LABEL} only ({SNOWMAN_DAYS} days)
+                    {snowman.before && snowman.remaining > 0
+                      ? ` · opens in ${formatRemaining(snowman.remaining)}`
+                      : ''}
+                    .
+                  </p>
+
                   {/* Birthday presentation: a cake that is sliced open */}
-                  <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-xl border border-plum/20 bg-white/50 p-3">
+                  <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-plum/20 bg-white/50 p-3">
                     <input
+                      id="birthday-letter"
                       type="checkbox"
                       checked={isCake}
                       onChange={(e) => setBirthday(e.target.checked)}
                       className="mt-0.5 h-4 w-4 accent-[#a3202f]"
                     />
-                    <span className="text-xs text-plum/75">
+                    <label htmlFor="birthday-letter" className="cursor-pointer text-xs text-plum/75">
                       <span className="block text-sm font-semibold text-plum">🎂 Birthday letter</span>
                       Delivered as a birthday cake with candles — the cake is sliced open and your letter rises out.
-                    </span>
-                  </label>
-
-                  {/* Mailbox Color Options */}
-                  {!isCat && !isBird && !isCake && (
-                    <div className="mt-5 border-t border-plum/15 pt-4">
-                      <p className="mb-2.5 text-xs font-medium text-plum">Mailbox Colour</p>
-                      <div className="flex flex-wrap items-center gap-3">
-                        {boxColors.map((b) => (
-                          <button
-                            key={b.id}
-                            type="button"
-                            onClick={() => setLetter({ ...letter, box: b.id })}
-                            aria-label={`${b.name} letterbox`}
-                            aria-pressed={letter.box === b.id}
-                            title={b.name}
-                            className={`h-9 w-9 rounded-full ring-offset-2 ring-offset-[#f9cfe3] transition-transform hover:scale-110 ${
-                              letter.box === b.id ? 'ring-2 ring-seal scale-105' : 'ring-1 ring-plum/25'
-                            }`}
-                            style={{ background: b.body }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Cat Coat & Custom Color Options */}
-                  {isCat && (
-                    <div className="mt-5 border-t border-plum/15 pt-4 space-y-4">
-                      <div>
-                        <p className="mb-2 text-xs font-medium text-plum">Cat Coat Options</p>
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                          {catColors.map((c) => {
-                            const isSelected = letter.box === c.id;
-                            return (
-                              <button
-                                key={c.id}
-                                type="button"
-                                onClick={() => setLetter({ ...letter, box: c.id })}
-                                aria-pressed={isSelected}
-                                className={`flex items-center gap-2 rounded-lg border p-2 text-left text-xs transition-all ${
-                                  isSelected
-                                    ? 'border-seal bg-white/90 font-medium shadow-xs'
-                                    : 'border-plum/20 bg-white/40 hover:bg-white/60'
-                                }`}
-                              >
-                                <span
-                                  className="h-4 w-4 shrink-0 rounded-full border border-plum/30"
-                                  style={{ background: c.body }}
-                                  aria-hidden="true"
-                                />
-                                <span className="truncate">{c.name}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Custom Coat Color Picker */}
-                      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-plum/20 bg-white/50 p-3">
-                        <label className="flex items-center gap-2 text-xs font-medium text-plum cursor-pointer">
-                          <span>Custom cat color:</span>
-                          <input
-                            type="color"
-                            value={currentCatHex}
-                            onChange={(e) => setCustomCatColor(e.target.value)}
-                            className="h-8 w-10 cursor-pointer rounded border border-plum/30 bg-transparent p-0.5"
-                            title="Choose custom cat fur color"
-                          />
-                        </label>
-                        <span className="text-xs text-plum/60 uppercase font-mono">{currentCatHex}</span>
-                        {letter.box.startsWith('cat_') && /^cat_[0-9a-fA-F]{6}$/.test(letter.box) && (
-                          <span className="text-xs text-seal font-medium">(Custom fur color applied)</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Bird Plumage & Custom Color Options */}
-                  {isBird && (
-                    <div className="mt-5 border-t border-plum/15 pt-4 space-y-4">
-                      <div>
-                        <p className="mb-2 text-xs font-medium text-plum">Avian Species & Plumage</p>
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                          {birdColors.map((b) => {
-                            const isSelected = letter.box === b.id;
-                            return (
-                              <button
-                                key={b.id}
-                                type="button"
-                                onClick={() => setLetter({ ...letter, box: b.id })}
-                                aria-pressed={isSelected}
-                                className={`flex items-center gap-2 rounded-lg border p-2 text-left text-xs transition-all ${
-                                  isSelected
-                                    ? 'border-seal bg-white/90 font-medium shadow-xs'
-                                    : 'border-plum/20 bg-white/40 hover:bg-white/60'
-                                }`}
-                              >
-                                <span
-                                  className="h-4 w-4 shrink-0 rounded-full border border-plum/30"
-                                  style={{ background: b.body }}
-                                  aria-hidden="true"
-                                />
-                                <span className="truncate">{b.name}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Custom Bird Plumage Color Picker */}
-                      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-plum/20 bg-white/50 p-3">
-                        <label className="flex items-center gap-2 text-xs font-medium text-plum cursor-pointer">
-                          <span>Custom bird plumage color:</span>
-                          <input
-                            type="color"
-                            value={currentBirdHex}
-                            onChange={(e) => setCustomBirdColor(e.target.value)}
-                            className="h-8 w-10 cursor-pointer rounded border border-plum/30 bg-transparent p-0.5"
-                            title="Choose custom bird plumage color"
-                          />
-                        </label>
-                        <span className="text-xs text-plum/60 uppercase font-mono">{currentBirdHex}</span>
-                        {letter.box.startsWith('bird_') && /^bird_[0-9a-fA-F]{6}$/.test(letter.box) && (
-                          <span className="text-xs text-seal font-medium">(Custom plumage color applied)</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </fieldset>
-
-                {/* Delivery Schedule */}
-                <fieldset className="rounded-2xl border border-plum/20 bg-white/40 p-4">
-                  <legend className="px-1 text-sm font-semibold text-plum">Delivery Schedule</legend>
-                  <label className="mt-1 flex items-center gap-2 text-sm text-plum cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={schedule}
-                      onChange={(e) => setSchedule(e.target.checked)}
-                      className="h-4 w-4 accent-[#a3202f]"
-                    />
-                    <span>Keep it sealed until a future date and time</span>
-                  </label>
-                  {schedule && (
-                    <div className="mt-4 rounded-xl border border-plum/20 bg-white/60 p-4">
-                      <DateTimePicker value={when} onChange={setWhen} minValue={Date.now() + 60_000} />
-                    </div>
-                  )}
-                  <p className="mt-2.5 text-xs text-plum/60">
-                    The recipient will see a live ticking countdown until the moment it arrives.
-                  </p>
-                </fieldset>
-
-                {/* Passcode PIN */}
-                <div className="rounded-2xl border border-plum/20 bg-white/40 p-4">
-                  <p className="mb-2 text-sm font-semibold text-plum">Secret Passcode</p>
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <span className="text-xs text-plum/70">Passcode length</span>
-                    <div className="flex items-center gap-1 rounded-lg border border-plum/20 bg-white/50 p-1">
-                      {[0, 4, 6].map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => {
-                            if (n === 6 && !v13Unlocked) {
-                              setLockedNotice(
-                                `6-digit passcodes arrive with v1.3 and unlock ${V13_UNLOCK_LABEL}. Until then letters use a 4-digit passcode.`
-                              );
-                              return;
-                            }
-                            setPinLength(n);
-                            setPin((p) => p.slice(0, n));
-                            setError('');
-                          }}
-                          aria-pressed={pinLength === n}
-                          className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
-                            pinLength === n
-                              ? 'bg-seal text-petal shadow-xs'
-                              : 'text-plum/70 hover:bg-white/70'
-                          } ${n === 6 && !v13Unlocked ? 'opacity-55' : ''}`}
-                        >
-                          {n === 0 ? 'None' : `${n} digits`}
-                          {n === 6 && !v13Unlocked && ' 🔒'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {pinLength === 0 ? (
-                    <p className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-3 py-2.5 text-xs leading-relaxed text-emerald-900">
-                      <strong>No passcode.</strong> Anyone who has the link can open this letter directly — the box is
-                      tapped and the letter opens straight away.
-                    </p>
-                  ) : (
-                    <>
-                      <PinInput
-                        length={pinLength}
-                        value={pin}
-                        onChange={setPin}
-                        invalid={!!error && pin.length !== pinLength}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isCake) setBirthday(true);
+                        setColorModal('cake');
+                      }}
+                      aria-label="Cake colour"
+                      title="Cake colour"
+                      className="ml-auto flex shrink-0 items-center gap-1 rounded-full border border-plum/15 bg-white/85 px-1.5 py-1 text-[10px] leading-none text-plum/65 shadow-xs hover:bg-white hover:text-plum"
+                    >
+                      <span
+                        className="h-2.5 w-2.5 rounded-full border border-plum/20"
+                        style={{ background: cakePalette.base }}
+                        aria-hidden="true"
                       />
-                      <p className="mt-2.5 text-xs text-plum/60">
-                        {pinLength} digits. The recipient types exactly {pinLength} digits to unlock your letter.
-                      </p>
-                    </>
-                  )}
+                      ···
+                    </button>
+                  </div>
+
+                </fieldset>
+
+                <div className="rounded-xl border border-plum/20 bg-white/40 px-3.5 py-2.5 text-[11px] leading-relaxed text-plum/65">
+                  Next: choose a delivery time, a secret passcode and an optional note — or send it right away.
                 </div>
 
-                {error && (
-                  <p role="alert" className="text-sm font-medium text-red-700">
-                    {error}
-                  </p>
-                )}
-
-                <div className="flex flex-col-reverse gap-2.5 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col-reverse gap-2.5 pt-2 sm:flex-row sm:items-center sm:justify-between">
                   <button
                     type="button"
                     onClick={() => setStep(3)}
@@ -1364,11 +1356,11 @@ export default function Create() {
                     ← Back to Stickers
                   </button>
                   <button
-                    onClick={create}
-                    disabled={busy}
-                    className="rounded-full bg-seal px-8 py-3.5 font-display text-lg text-petal hover:brightness-110 disabled:opacity-60 shadow-sm"
+                    type="button"
+                    onClick={() => setDeliveryOpen(true)}
+                    className="flex w-full items-center justify-center gap-2 rounded-full bg-seal px-7 py-3 font-medium text-petal hover:brightness-110 sm:w-auto"
                   >
-                    {busy ? 'Sealing…' : 'Seal & Create Letter'}
+                    Continue → Time, passcode &amp; note
                   </button>
                 </div>
               </div>
@@ -1378,7 +1370,7 @@ export default function Create() {
       </section>
 
       {/* Right Column: Live Interactive Preview */}
-      <section className="lg:sticky lg:top-10 lg:self-start">
+      <section className="lg:sticky lg:top-28 lg:self-start">
         {/* Preview header & tab switcher */}
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-1.5 rounded-lg border border-plum/20 bg-white/40 p-1 text-xs font-medium text-plum">
@@ -1404,6 +1396,8 @@ export default function Create() {
                 ? '🐱 Cat Delivery'
                 : isCake
                 ? '🎂 Birthday Cake'
+                : isSnowman
+                ? '⛄ Snowman Delivery'
                 : '📮 Mailbox'}
             </button>
           </div>
@@ -1430,17 +1424,42 @@ export default function Create() {
 
         {/* Tab 1: Letter preview */}
         {previewTab === 'letter' && (
-          <Letter
-            key={cur}
-            letter={letter}
-            page={cur}
-            className="min-h-80 turn-next"
-            editable
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onStickerChange={patchSticker}
-            onStickerRemove={removeSticker}
-          />
+          <>
+            <Letter
+              key={cur}
+              letter={letter}
+              page={cur}
+              className="min-h-80 turn-next"
+              editable
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onStickerChange={patchSticker}
+              onStickerRemove={removeSticker}
+            />
+            {pages.length > 1 && (
+              <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-plum/20 bg-white/40 px-2 py-1.5 text-xs text-plum">
+                <button
+                  type="button"
+                  onClick={() => setCur(Math.max(0, cur - 1))}
+                  disabled={cur === 0}
+                  className="rounded-md px-2 py-1 font-medium text-plum/75 hover:bg-white/70 hover:text-plum disabled:opacity-40"
+                >
+                  ← Prev
+                </button>
+                <span className="font-medium text-plum/70">
+                  Page {cur + 1} of {pages.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCur(Math.min(pages.length - 1, cur + 1))}
+                  disabled={cur >= pages.length - 1}
+                  className="rounded-md px-2 py-1 font-medium text-plum/75 hover:bg-white/70 hover:text-plum disabled:opacity-40"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {/* Tab 2: Delivery presentation preview */}
@@ -1456,12 +1475,16 @@ export default function Create() {
                     ? 'Tap the kitty to test the opening animation!'
                     : isCake
                     ? 'Tap the cake to slice it open!'
+                    : isSnowman
+                    ? 'Tap the snowman to open the letter!'
                     : 'Tap the letterbox to test the opening animation!'
                   : testStage === 'open'
                   ? isBird
                     ? 'Letter revealed! Tap to watch the bird fly away!'
                     : isCake
                     ? 'Slice cut and letter out! Tap to reset.'
+                    : isSnowman
+                    ? 'Letter revealed! Tap to watch the snowman wave goodbye.'
                     : 'Letter revealed! Tap to close or reset.'
                   : testStage === 'emerge'
                   ? 'Flying away! ✨'
@@ -1482,6 +1505,107 @@ export default function Create() {
           </div>
         )}
       </section>
+
+      {/* Floating mini preview: the letter stays in view while the form scrolls, on every screen */}
+      {!link && (
+        <FloatingPreview letter={letter} page={cur} pageCount={pages.length} onPageChange={setCur} />
+      )}
+
+      {colorModal && (
+        <DeliveryColorModal
+          type={colorModal}
+          value={colorModal === 'cake' ? `cake_${cakeColorId}` : letter.box}
+          onPick={(id) => {
+            if (colorModal === 'cake') setCakeColor(id);
+            else setLetter((l) => ({ ...l, box: id }));
+          }}
+          onCustom={
+            colorModal === 'cat'
+              ? setCustomCatColor
+              : colorModal === 'bird'
+              ? setCustomBirdColor
+              : colorModal === 'cake'
+              ? setCakeColor
+              : undefined
+          }
+          onClose={() => setColorModal(null)}
+        />
+      )}
+
+      {studio && !link && (
+        <StickerStudio
+          letter={letter}
+          page={cur}
+          pageCount={pages.length}
+          onPageChange={setCur}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onAddEmoji={(emoji) => addSticker(emoji)}
+          onAddStamp={(stamp) => addStamp(stamp)}
+          onPhotos={addPhotos}
+          onSignature={addSignature}
+          onPatch={patchSticker}
+          onRemove={removeSticker}
+          onDuplicate={duplicateSticker}
+          onClose={() => setStudio(false)}
+          stampsLocked={!v13Unlocked}
+          onLocked={(message) => setLockedNotice(message)}
+          mediaError={mediaError}
+        />
+      )}
+
+      {deliveryOpen && !link && (
+        <DeliveryModal
+          pinLength={pinLength}
+          setPinLength={setPinLength}
+          pin={pin}
+          setPin={setPin}
+          pinNote={pinNote}
+          setPinNote={setPinNote}
+          schedule={schedule}
+          setSchedule={setSchedule}
+          when={when}
+          setWhen={setWhen}
+          v13Unlocked={v13Unlocked}
+          onLocked={(message) => setLockedNotice(message)}
+          onCreate={create}
+          onClose={() => setDeliveryOpen(false)}
+          error={error}
+          busy={busy}
+        />
+      )}
+
+      {/* Full design gallery: “···” shows every template, gradient and font */}
+      {gallery && !link && (
+        <DesignGallery
+          kind={gallery}
+          letter={letter}
+          activeId={
+            gallery === 'template' ? letter.template : gallery === 'theme' ? letter.theme : letter.font
+          }
+          lockedIds={
+            v13Unlocked
+              ? null
+              : gallery === 'template'
+              ? V13_TEMPLATE_IDS
+              : gallery === 'theme'
+              ? V13_THEME_IDS
+              : V13_FONT_IDS
+          }
+          onPick={(id) =>
+            setLetter((l) => ({
+              ...l,
+              ...(gallery === 'template' ? { template: id } : gallery === 'theme' ? { theme: id } : { font: id }),
+            }))
+          }
+          onLocked={(option) =>
+            setLockedNotice(
+              `“${option.name}” is part of a time-locked release. It unlocks ${V13_UNLOCK_LABEL}. 🔒`
+            )
+          }
+          onClose={() => setGallery(null)}
+        />
+      )}
     </main>
   );
 }

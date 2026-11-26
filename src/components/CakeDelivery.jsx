@@ -1,15 +1,25 @@
+import { getCakePalette } from '../lib/themes.js';
+
 // A birthday cake delivery. Tapping it slices the cake and lifts the letter out.
 // `stage` follows the same closed -> opening -> open -> emerge sequence as the other presentations.
-export default function CakeDelivery({ stage = 'closed', onOpen, small = false, className = '' }) {
+// `color` is a cake box id (`cake_vanilla`) or the `cake` default.
+export default function CakeDelivery({ stage = 'closed', onOpen, small = false, className = '', color = '' }) {
   const tappable = typeof onOpen === 'function' && stage === 'closed';
   const activate = () => {
     if (tappable) onOpen();
   };
+  const pal = getCakePalette(color);
 
   return (
     <div
       className={`cake-scene ${small ? 'cake-sm' : ''} ${tappable ? 'cake-tap' : ''} ${className}`}
       data-stage={stage}
+      style={{
+        '--cake-frosting': pal.frosting,
+        '--cake-mid': pal.mid,
+        '--cake-base': pal.base,
+        '--cake-drip': pal.drip,
+      }}
       role={tappable ? 'button' : undefined}
       tabIndex={tappable ? 0 : undefined}
       aria-label={tappable ? 'Slice the birthday cake to open the letter' : undefined}

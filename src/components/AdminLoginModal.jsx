@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { isAdminLoggedIn, loginAdmin, logoutAdmin } from '../lib/admin.js';
 
 export default function AdminLoginModal({ onClose, onLoginSuccess }) {
@@ -30,7 +31,7 @@ export default function AdminLoginModal({ onClose, onLoginSuccess }) {
     setError('');
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
       onClick={onClose}
@@ -39,7 +40,7 @@ export default function AdminLoginModal({ onClose, onLoginSuccess }) {
       aria-labelledby="admin-login-title"
     >
       <div
-        className="w-full max-w-md rounded-3xl border border-plum/20 bg-[#fffdfa] p-6 shadow-2xl sm:p-8"
+        className="w-full max-w-md rounded-3xl border border-plum/20 bg-[var(--ui-paper)] p-6 shadow-2xl sm:p-8"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-3 border-b border-plum/10">
@@ -140,6 +141,7 @@ export default function AdminLoginModal({ onClose, onLoginSuccess }) {
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

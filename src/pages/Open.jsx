@@ -5,10 +5,11 @@ import CountdownTimer from '../components/CountdownTimer.jsx';
 import { openLetter } from '../lib/seal.js';
 import { fetchLetter } from '../lib/api.js';
 import { exportLetterPdf, pdfName, savePdf } from '../lib/pdf.js';
-import { boxColors, catColors, birdColors, getPages, resolveBox } from '../lib/themes.js';
+import { boxColors, catColors, birdColors, getPages, isCakeBox, resolveBox } from '../lib/themes.js';
 import Letterbox from '../components/Letterbox.jsx';
 import { useNav } from '../lib/nav.js';
 import { recordLetterOpened } from '../lib/admin.js';
+import { trackEvent } from '../lib/analytics.js';
 
 function MusicButton({ music }) {
   if (!music || !music.src || !music.src.startsWith('data:audio/')) return null;
@@ -36,7 +37,7 @@ function MusicButton({ music }) {
   );
 }
 
-function Reader({ letter, onExit }) {
+function Reader({ letter, onExit, note }) {
   const { go: goScreen } = useNav();
   const pages = getPages(letter);
   const [cur, setCur] = useState(0);
@@ -57,6 +58,12 @@ function Reader({ letter, onExit }) {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-14">
+      {note && (
+        <p className="mb-4 rounded-xl border border-plum/20 bg-white/60 px-4 py-3 text-left text-sm leading-relaxed text-plum/80">
+          <span className="font-semibold text-plum">A note from the sender: </span>
+          {note}
+        </p>
+      )}
       <Letter key={cur} letter={letter} page={cur} className={`min-h-96 ${dir === 'next' ? 'turn-next' : 'turn-prev'}`} />
 
       {pages.length > 1 && (
@@ -90,11 +97,23 @@ function Reader({ letter, onExit }) {
 // Box ids can contain underscores (cat_orange, bird_dove, cat_1a2b3c…), so the box prefix is
 // matched against the known ids before the rest is treated as the encrypted token.
 const isKnownBox = (id) =>
-  id === 'cake' ||
+  isCakeBox(id) ||
+  id === 'snowman' ||
   boxColors.some((b) => b.id === id) ||
   catColors.some((c) => c.id === id) ||
   birdColors.some((b) => b.id === id) ||
   /^(cat|bird)_[0-9a-f]{6}$/.test(id);
+
+const decodeNote = (encoded) => {
+  try {
+    let b = encoded.replace(/\./g, '-').replace(/-/g, '+').replace(/_/g, '/');
+    while (b.length % 4 !== 0) b += '=';
+    const bin = atob(b);
+    return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))).slice(0, 140);
+  } catch {
+    return '';
+  }
+};
 
 const parseLongToken = (raw) => {
   if (!raw || typeof raw !== 'string') return null;
@@ -103,6 +122,7 @@ const parseLongToken = (raw) => {
   let box = resolveBox(null);
   let unlockAt = null;
   let pinLength = null;
+  let pinNote = '';
 
   const dash = rest.indexOf('-');
   if (dash > 0 && isKnownBox(rest.slice(0, dash))) {
@@ -123,8 +143,16 @@ const parseLongToken = (raw) => {
     rest = unlock[2];
   }
 
+  // Optional plaintext passcode note, appended after the token as -hn<base64url, dots for dashes>.
+  // Encrypted tokens only ever contain "-a" or "-b", so "-hn" can never appear inside one.
+  const note = rest.match(/-hn([A-Za-z0-9_.]+)$/);
+  if (note) {
+    pinNote = decodeNote(note[1]);
+    rest = rest.slice(0, -note[0].length);
+  }
+
   if (rest.length < 40 || !/^[A-Za-z0-9-]+$/.test(rest)) return null;
-  return { box, unlockAt, pinLength, token: rest };
+  return { box, unlockAt, pinLength, pinNote, token: rest };
 };
 
 // Opened by a short link (/l/<id>, shortId set) or a long link (#l-<token>.<box>, token set).
@@ -142,6 +170,7 @@ export default function Open({ token: longToken, shortId, onExit }) {
         box: parsed.box,
         token: parsed.token,
         pinLength: parsed.pinLength,
+        pinNote: parsed.pinNote || '',
       };
     }
     return {
@@ -150,6 +179,7 @@ export default function Open({ token: longToken, shortId, onExit }) {
       box: parsed.box,
       unlockAt: parsed.unlockAt,
       pinLength: parsed.pinLength,
+      pinNote: parsed.pinNote || '',
     };
   });
 
@@ -230,6 +260,7 @@ export default function Open({ token: longToken, shortId, onExit }) {
       setFailedAttempts(0);
       setLetter(l);
       recordLetterOpened();
+      trackEvent('letter_opened');
       setStage('emerge');
       setTimeout(() => setPhase('read'), 1100);
     } catch {
@@ -262,7 +293,8 @@ export default function Open({ token: longToken, shortId, onExit }) {
     }
   };
 
-  if (phase === 'read' && letter) return <Reader letter={letter} onExit={onExit} />;
+  if (phase === 'read' && letter)
+    return <Reader letter={letter} onExit={onExit} note={source.pinNote || ''} />;
 
   const shell = (children) => (
     <main className="grid min-h-[calc(100vh-8.5rem)] place-items-center px-4 py-8 sm:px-6 sm:py-10">
@@ -342,6 +374,12 @@ export default function Open({ token: longToken, shortId, onExit }) {
                 ? 'Enter the 6-digit passcode.'
                 : 'Enter the 4 or 6-digit passcode.'}
             </p>
+            {source.pinNote && (
+              <p className="mx-auto mt-3 max-w-xs rounded-xl border border-plum/20 bg-white/60 px-3 py-2 text-left text-xs leading-relaxed text-plum/75">
+                <span className="font-semibold text-plum">A note from the sender: </span>
+                {source.pinNote}
+              </p>
+            )}
             <div className="mt-5 flex justify-center">
               <PinInput
                 length={declaredPin || 6}

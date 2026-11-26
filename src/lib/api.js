@@ -2,12 +2,12 @@ const withTimeout = (ms) => { const c = new AbortController(); setTimeout(() => 
 
 // Returns { id } when the server stored the letter, or null when no server is reachable
 // (local dev, the preview, or storage not set up). The caller then uses a long link instead.
-export async function saveLetter(token, unlockAt, box, pinLength) {
+export async function saveLetter(token, unlockAt, box, pinLength, pinNote = '') {
   try {
     const res = await fetch('/api/letters', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, unlockAt, box, pinLength }),
+      body: JSON.stringify({ token, unlockAt, box, pinLength, pinNote }),
       signal: withTimeout(8000),
     });
     if (!res.ok) return null;
@@ -26,13 +26,13 @@ export async function fetchLetter(id) {
     const res = await fetch(`/api/letters/${encodeURIComponent(id)}`, { signal: withTimeout(10000) });
     if (res.status === 403) {
       const d = await res.json();
-      return { status: 'locked', unlockAt: d.unlockAt, box: d.box, pinLength: d.pinLength ?? null };
+      return { status: 'locked', unlockAt: d.unlockAt, box: d.box, pinLength: d.pinLength ?? null, pinNote: d.pinNote || '' };
     }
     if (res.status === 404) return { status: 'missing' };
     if (res.status === 429) return { status: 'rate-limited' };
     if (!res.ok) return { status: 'error' };
     const d = await res.json();
-    return { status: 'ready', token: d.token, box: d.box, pinLength: d.pinLength ?? null };
+    return { status: 'ready', token: d.token, box: d.box, pinLength: d.pinLength ?? null, pinNote: d.pinNote || '' };
   } catch {
     return { status: 'error' };
   }

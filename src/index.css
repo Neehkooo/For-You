@@ -9,25 +9,82 @@
   --color-blush: #fcedef;
 }
 
+:root {
+  --ui-paper: #fffdfa;
+  --ui-page: #e0f2fe;
+  --ui-page-image: linear-gradient(170deg, #bae6fd 0%, #e0f2fe 35%, #f0fdf4 65%, #fce7f3 100%);
+  /* Time-lock notice in the header */
+  --notice-bg: #fff8e1;
+  --notice-border: #f0c96a;
+  --notice-text: #7a4a12;
+  --notice-soft: #9a6420;
+}
+
+/* Appearance modes: Afternoon (bright) → Dawn (warm mid) → Dusk (dark).
+   Tailwind colours are CSS variables in v4, so overriding them here re-themes
+   every text-*, bg-*, border-* and ring-* utility. */
+html[data-ui='afternoon'] {
+  --color-plum: #2b1a2e;
+  --ui-paper: #fffdfa;
+  --ui-page: #e0f2fe;
+  --ui-page-image: linear-gradient(170deg, #bae6fd 0%, #e0f2fe 35%, #f0fdf4 65%, #fce7f3 100%);
+  --notice-bg: #fff8e1;
+  --notice-border: #f0c96a;
+  --notice-text: #7a4a12;
+  --notice-soft: #9a6420;
+}
+
+html[data-ui='dawn'] {
+  --color-plum: #3a2a33;
+  --color-white: #f2e7e2;
+  --ui-paper: #fdf6ef;
+  --ui-page: #e6d6d5;
+  --ui-page-image: linear-gradient(175deg, #cbd8ea 0%, #e6d9e2 42%, #f6dfd2 78%, #fbeadf 100%);
+  --notice-bg: #f9e7cf;
+  --notice-border: #d9ae7c;
+  --notice-text: #6b3f1f;
+  --notice-soft: #87552c;
+}
+
+html[data-ui='dusk'] {
+  --color-plum: #efe4f1;
+  --color-white: #2c2238;
+  --ui-paper: #2e243a;
+  --ui-page: #120f1b;
+  --ui-page-image: linear-gradient(180deg, #100c1a 0%, #1d1529 48%, #33203a 100%);
+  --notice-bg: #2a2119;
+  --notice-border: #6b5220;
+  --notice-text: #fcd34d;
+  --notice-soft: #d9b56a;
+}
+
+html[data-ui='afternoon'] body,
+html[data-ui='dawn'] body,
+html[data-ui='dusk'] body {
+  background-color: var(--ui-page);
+  background-image: var(--ui-page-image);
+}
+
 body {
   min-height: 100vh;
-  background-color: #e0f2fe;
-  background-image: linear-gradient(170deg, #bae6fd 0%, #e0f2fe 35%, #f0fdf4 65%, #fce7f3 100%);
+  background-color: var(--ui-page);
+  background-image: var(--ui-page-image);
   background-attachment: fixed;
   color: var(--color-plum);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 .field {
   width: 100%;
   border-radius: 0.5rem;
-  border: 1px solid rgb(43 26 46 / 0.25);
-  background: rgb(255 255 255 / 0.6);
+  border: 1px solid color-mix(in oklab, var(--color-plum) 25%, transparent);
+  background: color-mix(in oklab, var(--color-white) 60%, transparent);
   padding: 0.65rem 0.85rem;
   color: var(--color-plum);
 }
-.field::placeholder { color: rgb(43 26 46 / 0.45); }
+.field::placeholder { color: color-mix(in oklab, var(--color-plum) 45%, transparent); }
 
 :focus-visible { outline: 2px solid var(--color-seal); outline-offset: 2px; }
 
@@ -49,10 +106,35 @@ body {
 @media (prefers-reduced-motion: reduce) { .hearts { display: none; } }
 
 /* Page transitions */
-.page-in  { animation: page-in 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+/* backwards, not both: the finished state drops its transform so nothing fixed
+   stays anchored to this wrapper. */
+.page-in  { animation: page-in 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
 .page-out { animation: page-out 0.3s ease-in both; }
 @keyframes page-in  { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @keyframes page-out { to { opacity: 0; transform: translateY(-8px); } }
+/* Gentle entrances: modals, admin tabs and editor steps */
+@keyframes soft-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-rise { from { opacity: 0; transform: translateY(12px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes modal-sheet { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+@keyframes soft-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+[role="dialog"] { animation: soft-fade 0.2s ease-out both; }
+[role="dialog"] > div { animation: modal-rise 0.24s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.tab-in { animation: soft-rise 0.26s ease-out both; }
+.step-in { animation: soft-rise 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+@media (max-width: 640px) {
+  [role="dialog"] > div { animation-name: modal-sheet; }
+}
+
+/* Slide-over menu: the drawer comes in from the right, not up like a sheet */
+@keyframes drawer-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+.ui-drawer[role="dialog"] { animation: soft-fade 0.18s ease-out both; }
+.ui-drawer > .drawer-panel { animation: drawer-in 0.24s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@media (max-width: 640px) {
+  .ui-drawer > .drawer-panel { animation-name: drawer-in; }
+}
+
 .letter-reveal { animation: letter-reveal 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.15s both; }
 @keyframes letter-reveal { from { opacity: 0; transform: translateY(26px) scale(0.97); } to { opacity: 1; transform: none; } }
 
@@ -337,7 +419,7 @@ body {
 
 /* Flap Opens */
 .bird-flap-group {
-  transform-origin: 146px 82px;
+  transform-origin: 148px 92px;
   transition: transform 0.85s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .bird-delivery[data-stage="opening"] .bird-flap-group,
@@ -507,7 +589,9 @@ body {
 
 /* Mobile comfort */
 html { -webkit-text-size-adjust: 100%; }
-html, body { overflow-x: hidden; }
+/* clip, not hidden: `hidden` makes the body a scroll container and stops the header
+   and preview column from sticking. */
+html, body { overflow-x: clip; }
 button, a, [role="button"], label { touch-action: manipulation; }
 @media (max-width: 640px) {
   /* 16px inputs stop iOS from zooming in when a field is focused */
@@ -517,6 +601,10 @@ button, a, [role="button"], label { touch-action: manipulation; }
 
 /* Birthday cake delivery */
 .cake-scene {
+  --cake-frosting: #facdd9;
+  --cake-mid: #f4b9c9;
+  --cake-base: #eea3b7;
+  --cake-drip: #fffaf7;
   position: relative;
   width: min(16rem, 72vw);
   aspect-ratio: 1 / 1;
@@ -559,21 +647,33 @@ button, a, [role="button"], label { touch-action: manipulation; }
 .cake-tier-base {
   bottom: 0;
   height: 38%;
-  background: linear-gradient(180deg, #f8c9d5, #eea3b7);
+  background: linear-gradient(
+    180deg,
+    var(--cake-base),
+    color-mix(in oklab, var(--cake-base) 82%, #1a1018)
+  );
 }
 .cake-tier-mid {
   bottom: 30%;
   left: 5%;
   right: 5%;
   height: 30%;
-  background: linear-gradient(180deg, #fde4eb, #f4b9c9);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--cake-mid) 70%, white),
+    var(--cake-mid)
+  );
 }
 .cake-tier-top {
   bottom: 55%;
   left: 12%;
   right: 12%;
   height: 27%;
-  background: linear-gradient(180deg, #fff5f8, #facdd9);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--cake-frosting) 45%, white),
+    var(--cake-frosting)
+  );
 }
 
 .cake-drip {
@@ -583,7 +683,7 @@ button, a, [role="button"], label { touch-action: manipulation; }
   top: -6px;
   height: 46%;
   border-radius: 12px 12px 46% 46% / 12px 12px 78% 78%;
-  background: #fffaf7;
+  background: var(--cake-drip);
   box-shadow: inset 0 -3px 4px rgb(43 26 46 / 0.05);
 }
 
@@ -629,7 +729,13 @@ button, a, [role="button"], label { touch-action: manipulation; }
   width: 27%;
   height: 33%;
   border-radius: 8px 8px 10px 10px;
-  background: linear-gradient(180deg, #fffaf7 0 20%, #fbd9e2 20% 52%, #fffaf7 52% 64%, #f2b4c5 64%);
+  background: linear-gradient(
+    180deg,
+    var(--cake-drip) 0 20%,
+    color-mix(in oklab, var(--cake-frosting) 78%, white) 20% 52%,
+    var(--cake-drip) 52% 64%,
+    var(--cake-mid) 64%
+  );
   box-shadow: 0 8px 14px rgb(43 26 46 / 0.22);
   transition: transform 0.85s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.6s ease;
   z-index: 3;
@@ -639,7 +745,7 @@ button, a, [role="button"], label { touch-action: manipulation; }
   inset: 0 0 auto;
   height: 22%;
   border-radius: 8px 8px 40% 40% / 8px 8px 70% 70%;
-  background: #fffaf7;
+  background: var(--cake-drip);
 }
 .cake-slice-berries {
   position: absolute;
@@ -705,4 +811,265 @@ button, a, [role="button"], label { touch-action: manipulation; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cake-body, .cake-candle i { animation: none; }
+}
+
+/* Cat delivery refinements: breathing, head tilt, happy wiggle, hop on emerge */
+.cat-body-shape {
+  transform-origin: 100px 185px;
+  animation: catBreathe 4.6s ease-in-out infinite;
+}
+@keyframes catBreathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.015, 1.02); }
+}
+.cat-head-shape {
+  transform-origin: 100px 100px;
+  animation: catHeadTilt 6.5s ease-in-out infinite;
+}
+@keyframes catHeadTilt {
+  0%, 72%, 100% { transform: rotate(0deg); }
+  80% { transform: rotate(-2.2deg); }
+  90% { transform: rotate(1.6deg); }
+}
+.cat-paws-group { transform-origin: 100px 122px; }
+.cat-delivery[data-stage="opening"] .cat-paws-group,
+.cat-delivery[data-stage="open"] .cat-paws-group {
+  animation: catPawSqueeze 1.6s ease-in-out infinite;
+}
+@keyframes catPawSqueeze {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.5px); }
+}
+.cat-delivery[data-stage="open"] .cat-delivery-svg {
+  animation: catHappyWiggle 2.4s ease-in-out infinite;
+}
+@keyframes catHappyWiggle {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  25% { transform: rotate(-1.4deg) translateY(-2px); }
+  75% { transform: rotate(1.4deg) translateY(-2px); }
+}
+.cat-delivery[data-stage="emerge"] .cat-delivery-svg {
+  animation: catHopAway 0.9s cubic-bezier(0.3, 0.7, 0.3, 1) 2;
+}
+@keyframes catHopAway {
+  0%, 100% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-14px) scale(1.03); }
+  70% { transform: translateY(2px) scale(0.99); }
+}
+.cat-delivery[data-stage="emerge"] .cat-tail { animation-duration: 0.7s; }
+.cat-delivery[data-stage="emerge"] .cat-heart-1,
+.cat-delivery[data-stage="emerge"] .cat-heart-2 { animation-duration: 0.9s; }
+
+/* Bird delivery refinements: head bob, tail flick, soft wing beat, speed lines */
+.bird-head-group {
+  transform-origin: 138px 84px;
+  animation: birdHeadBob 3.2s ease-in-out infinite;
+}
+@keyframes birdHeadBob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-1.5px) rotate(-1.5deg); }
+}
+.bird-tail {
+  transform-origin: 78px 150px;
+  animation: birdTailFlick 4.4s ease-in-out infinite;
+}
+@keyframes birdTailFlick {
+  0%, 86%, 100% { transform: rotate(0deg); }
+  90% { transform: rotate(4deg); }
+  94% { transform: rotate(-2deg); }
+}
+.bird-delivery[data-stage="open"] .bird-near-wing {
+  animation: birdWingSoft 2.6s ease-in-out infinite;
+}
+@keyframes birdWingSoft {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-7deg); }
+}
+.bird-speed-lines { opacity: 0; transition: opacity 0.25s; }
+.bird-delivery[data-stage="emerge"] .bird-speed-lines {
+  animation: birdSpeedLines 1s ease-out forwards;
+}
+@keyframes birdSpeedLines {
+  0% { opacity: 0; transform: translateX(10px); }
+  30% { opacity: 0.9; }
+  100% { opacity: 0.15; transform: translateX(-6px); }
+}
+
+/* Snowman delivery (seasonal, December window only) */
+.snowman-delivery {
+  position: relative;
+  width: min(18rem, 78vw);
+  aspect-ratio: 1 / 1.1;
+  margin: 0 auto;
+  perspective: 1000px;
+  user-select: none;
+}
+.snowman-delivery-sm { width: 9rem; }
+.snowman-delivery-tap { cursor: pointer; }
+.snowman-delivery-tap:focus-visible { outline: 2px solid var(--color-seal); outline-offset: 8px; border-radius: 16px; }
+.snowman-delivery-tap:hover .snowman-svg { transform: translateY(-3px) scale(1.02); }
+.snowman-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.snowman-head {
+  transform-origin: 100px 76px;
+  animation: snowmanHeadBob 4.8s ease-in-out infinite;
+}
+@keyframes snowmanHeadBob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-2px) rotate(-2deg); }
+}
+
+.snowman-scarf {
+  transform-origin: 120px 102px;
+  animation: snowmanScarfFlutter 3.6s ease-in-out infinite;
+}
+@keyframes snowmanScarfFlutter {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(5deg); }
+}
+
+.snowman-arm-left { transform-origin: 70px 118px; animation: snowmanArmSwayLeft 5s ease-in-out infinite; }
+.snowman-arm-right { transform-origin: 130px 118px; animation: snowmanArmSwayRight 5.4s ease-in-out infinite; }
+@keyframes snowmanArmSwayLeft {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(4deg); }
+}
+@keyframes snowmanArmSwayRight {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-4deg); }
+}
+
+.snowman-flurries { opacity: 0.6; }
+.snowman-flurry-1 { animation: snowmanFlurry 5s linear infinite; }
+.snowman-flurry-2 { animation: snowmanFlurry 6.2s linear infinite 1.1s; }
+.snowman-flurry-3 { animation: snowmanFlurry 4.4s linear infinite 0.6s; }
+.snowman-flurry-4 { animation: snowmanFlurry 5.6s linear infinite 2s; }
+.snowman-flurry-5 { animation: snowmanFlurry 6.8s linear infinite 1.6s; }
+@keyframes snowmanFlurry {
+  0% { transform: translate(0, 0); opacity: 0; }
+  20% { opacity: 0.95; }
+  100% { transform: translate(-18px, 30px); opacity: 0; }
+}
+
+.snowman-flap-group {
+  transform-origin: 100px 108px;
+  transition: transform 0.85s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.snowman-delivery[data-stage="opening"] .snowman-flap-group,
+.snowman-delivery[data-stage="open"] .snowman-flap-group,
+.snowman-delivery[data-stage="emerge"] .snowman-flap-group {
+  transform: rotateX(168deg) translateY(-2px);
+}
+
+.snowman-letter {
+  transition: transform 1.1s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.8s ease 0.4s;
+}
+.snowman-delivery[data-stage="emerge"] .snowman-letter {
+  transform: translateY(-140%) rotate(-3deg);
+  opacity: 0;
+}
+
+.snowman-delivery[data-stage="open"] .snowman-svg {
+  animation: snowmanDelight 2.8s ease-in-out infinite;
+}
+@keyframes snowmanDelight {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.snowman-delivery[data-stage="emerge"] .snowman-svg {
+  animation: snowmanSettle 0.9s ease-in-out 2;
+}
+@keyframes snowmanSettle {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(1.4deg); }
+}
+.snowman-delivery[data-stage="emerge"] .snowman-arm-right {
+  animation: snowmanWave 0.6s ease-in-out 3;
+}
+@keyframes snowmanWave {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-16deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .snowman-head, .snowman-scarf, .snowman-arm-left, .snowman-arm-right,
+  .snowman-flurry-1, .snowman-flurry-2, .snowman-flurry-3, .snowman-flurry-4, .snowman-flurry-5,
+  .cat-body-shape, .cat-head-shape, .bird-head-group, .bird-tail { animation: none; }
+}
+
+/* Sticker size slider (step 3 settings panel) */
+.sticker-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: rgb(43 26 46 / 0.18);
+  outline: none;
+  touch-action: pan-y;
+}
+.sticker-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--color-seal);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+  cursor: pointer;
+}
+.sticker-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--color-seal);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+  cursor: pointer;
+}
+
+/* ---------- The public board (/post-its) ---------- */
+/* A cork wall: layered speckles over a warm brown gradient. */
+.board-cork {
+  background-color: #8a5a35;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgb(0 0 0 / 0.18) 0 1.4px, transparent 2px),
+    radial-gradient(circle at 72% 58%, rgb(255 255 255 / 0.08) 0 1.4px, transparent 2px),
+    radial-gradient(circle at 44% 84%, rgb(0 0 0 / 0.12) 0 1px, transparent 2px),
+    linear-gradient(150deg, #9c6a41, #7b4d2c 55%, #67402a);
+  background-size: 18px 18px, 26px 26px, 14px 14px, 100% 100%;
+  box-shadow: inset 0 2px 20px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+html[data-ui='dusk'] .board-cork { filter: brightness(0.78) saturate(0.9); }
+
+.board-note {
+  position: relative;
+  color: var(--note-ink, #4a3a1a);
+  background: var(--note-bg, #fdf0a8);
+  border-bottom: 2px solid var(--note-edge, #e8d67e);
+  box-shadow: 0 6px 12px -6px rgb(0 0 0 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.45);
+  transform: rotate(var(--tilt, 0deg));
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.board-note:hover {
+  transform: rotate(0deg) translateY(-2px);
+  box-shadow: 0 12px 20px -10px rgb(0 0 0 / 0.6), inset 0 1px 0 rgb(255 255 255 / 0.45);
+}
+.board-pin {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  margin-left: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, #ffd7dd, #c0392b 58%, #7d1f16);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.45), inset 0 -1px 1px rgb(0 0 0 / 0.3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-note { transform: none; }
 }

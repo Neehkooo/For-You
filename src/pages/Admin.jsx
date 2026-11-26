@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import LogEditorModal from '../components/LogEditorModal.jsx';
+import { fetchSiteAnalytics } from '../lib/analytics.js';
 import {
   isAdminLoggedIn,
   loginAdmin,
@@ -21,6 +23,21 @@ export default function Admin({ onExit }) {
 
   // Tab 1: Stats
   const [stats, setStats] = useState(getAdminStats);
+  const [siteAnalytics, setSiteAnalytics] = useState({ status: 'idle' });
+
+  const loadSiteAnalytics = async () => {
+    setSiteAnalytics({ status: 'loading' });
+    try {
+      const data = await fetchSiteAnalytics();
+      setSiteAnalytics(data.configured ? { status: 'ready', ...data } : { status: 'off' });
+    } catch (err) {
+      setSiteAnalytics({ status: 'error', message: err.message });
+    }
+  };
+
+  useEffect(() => {
+    if (authed) loadSiteAnalytics();
+  }, [authed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tab 2: Maintenance
   const [maintenance, setMaintenance] = useState(getMaintenance);
@@ -38,6 +55,7 @@ export default function Admin({ onExit }) {
     fixes: '',
   });
   const [logsSaved, setLogsSaved] = useState(false);
+  const [editingLog, setEditingLog] = useState(null);
 
   useEffect(() => {
     const handleStatsUpdate = () => setStats(getAdminStats());
@@ -84,6 +102,32 @@ export default function Admin({ onExit }) {
     saveMaintenance(updated);
   };
 
+  const blankLog = () => ({
+    version: '',
+    title: '',
+    date: new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }),
+    features: '',
+    ui: '',
+    fixes: '',
+  });
+
+  const lines = (text) =>
+    text
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+  const closeAddForm = () => {
+    setShowAddLog(false);
+    setNewLog(blankLog());
+  };
+
+  const openNewLog = () => {
+    setNewLog(blankLog());
+    setShowAddLog(true);
+  };
+
+  // Creates a new release note (editing an existing one happens in the modal below).
   const handleAddLog = (e) => {
     e.preventDefault();
     if (!newLog.version.trim() || !newLog.title.trim()) return;
@@ -93,32 +137,27 @@ export default function Admin({ onExit }) {
       version: newLog.version.trim(),
       title: newLog.title.trim(),
       date: newLog.date.trim(),
-      features: newLog.features
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean),
-      ui: newLog.ui
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean),
-      fixes: newLog.fixes
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean),
+      features: lines(newLog.features),
+      ui: lines(newLog.ui),
+      fixes: lines(newLog.fixes),
     };
 
     const updated = [parsedLog, ...logs];
     setLogs(updated);
     saveUpdateLogs(updated);
-    setShowAddLog(false);
-    setNewLog({
-      version: '',
-      title: '',
-      date: new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }),
-      features: '',
-      ui: '',
-      fixes: '',
-    });
+    closeAddForm();
+    setLogsSaved(true);
+    setTimeout(() => setLogsSaved(false), 2500);
+  };
+
+  // Opens the modal editor for one entry, and saves it back in place.
+  const startEditLog = (log) => setEditingLog(log);
+
+  const saveEditedLog = (edited) => {
+    const updated = logs.map((l) => (l.id === edited.id ? { ...edited, edited: true } : l));
+    setLogs(updated);
+    saveUpdateLogs(updated);
+    setEditingLog(null);
     setLogsSaved(true);
     setTimeout(() => setLogsSaved(false), 2500);
   };
@@ -275,7 +314,97 @@ export default function Admin({ onExit }) {
 
       {/* TAB 1: Statistics */}
       {tab === 'stats' && (
-        <section className="mt-8 space-y-8 animate-in fade-in duration-300">
+        <section className="mt-8 space-y-8 tab-in">
+          {/* Vercel Web Analytics (live, server-side) */}
+          <div className="rounded-3xl border border-plum/20 bg-white/70 p-5 shadow-xs sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-plum/10 pb-4">
+              <div>
+                <h2 className="font-display text-2xl font-light text-plum">Vercel Web Analytics</h2>
+                <p className="mt-1 text-xs text-plum/60">
+                  Real page views and visitors from the live deployment. Counts only start after Analytics is enabled in
+                  Vercel and the site is redeployed.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href="https://vercel.com/dashboard"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-plum/25 bg-white/60 px-3 py-1.5 text-xs font-medium text-plum hover:bg-white"
+                >
+                  Open dashboard ↗
+                </a>
+                <button
+                  type="button"
+                  onClick={loadSiteAnalytics}
+                  disabled={siteAnalytics.status === 'loading'}
+                  className="rounded-full border border-plum/25 bg-white/60 px-3 py-1.5 text-xs font-medium text-plum hover:bg-white disabled:opacity-50"
+                >
+                  {siteAnalytics.status === 'loading' ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            {siteAnalytics.status === 'ready' && (
+              <>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    { label: 'Page views · 30d', value: siteAnalytics.month?.pageviews, icon: '👁️' },
+                    { label: 'Visitors · 30d', value: siteAnalytics.month?.visitors, icon: '👥' },
+                    { label: 'Page views · 7d', value: siteAnalytics.week?.pageviews, icon: '📈' },
+                    { label: 'Visitors · 7d', value: siteAnalytics.week?.visitors, icon: '🧭' },
+                  ].map((m) => (
+                    <div key={m.label} className="rounded-2xl border border-plum/15 bg-white/60 p-4">
+                      <div className="flex items-center justify-between text-plum/55">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider">{m.label}</span>
+                        <span aria-hidden="true">{m.icon}</span>
+                      </div>
+                      <p className="mt-2 font-display text-3xl font-light text-plum">
+                        {Number(m.value || 0).toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-[11px] text-plum/50">
+                  Project {siteAnalytics.project} · updated{' '}
+                  {new Date(siteAnalytics.fetchedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                  . Custom events tracked: <code>letter_created</code>, <code>letter_opened</code> (see the Events tab in
+                  Vercel).
+                </p>
+              </>
+            )}
+
+            {siteAnalytics.status === 'loading' && (
+              <p className="mt-4 animate-pulse text-xs text-plum/55">Fetching page views from Vercel…</p>
+            )}
+
+            {siteAnalytics.status === 'off' && (
+              <div className="mt-4 rounded-2xl border border-amber-300/70 bg-amber-50/60 p-4 text-xs leading-relaxed text-amber-900">
+                <p className="font-semibold">Not connected yet</p>
+                <ol className="mt-1 list-decimal space-y-1 pl-4">
+                  <li>
+                    Vercel → your project → <strong>Analytics</strong> → <strong>Enable</strong>.
+                  </li>
+                  <li>
+                    Create an access token (Account settings → Tokens) and add{' '}
+                    <code>VERCEL_ANALYTICS_TOKEN</code>, <code>VERCEL_ANALYTICS_PROJECT_ID</code> (and{' '}
+                    <code>VERCEL_TEAM_ID</code> if it is a team project) in Settings → Environment Variables.
+                  </li>
+                  <li>Redeploy so <code>/api/analytics</code> can read the numbers.</li>
+                </ol>
+                <p className="mt-2 text-amber-800/80">
+                  The counters below still work — they are stored in this browser only.
+                </p>
+              </div>
+            )}
+
+            {siteAnalytics.status === 'error' && (
+              <p className="mt-4 rounded-2xl border border-rose-300/70 bg-rose-50/70 p-4 text-xs text-rose-800">
+                Couldn’t load Vercel analytics: {siteAnalytics.message}. Check the token’s scope and the project id.
+              </p>
+            )}
+          </div>
+
           {/* Top KPI Cards */}
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {/* Letters Created */}
@@ -448,7 +577,7 @@ export default function Admin({ onExit }) {
 
       {/* TAB 2: Scheduled Maintenance */}
       {tab === 'maintenance' && (
-        <section className="mt-8 space-y-8 animate-in fade-in duration-300">
+        <section className="mt-8 space-y-8 tab-in">
           <form
             onSubmit={handleSaveMaintenance}
             className="rounded-3xl border border-plum/20 bg-white/70 p-6 sm:p-8 shadow-xs space-y-6"
@@ -598,7 +727,7 @@ export default function Admin({ onExit }) {
 
       {/* TAB 3: Update Logs Management */}
       {tab === 'logs' && (
-        <section className="mt-8 space-y-8 animate-in fade-in duration-300">
+        <section className="mt-8 space-y-8 tab-in">
           <div className="rounded-3xl border border-plum/20 bg-white/70 p-6 sm:p-8 shadow-xs space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-plum/10 pb-4">
               <div>
@@ -610,7 +739,7 @@ export default function Admin({ onExit }) {
 
               <button
                 type="button"
-                onClick={() => setShowAddLog(!showAddLog)}
+                onClick={showAddLog ? closeAddForm : openNewLog}
                 className="rounded-full bg-seal px-5 py-2.5 text-xs font-medium text-petal hover:brightness-110 shadow-xs flex items-center gap-1.5"
               >
                 <span>{showAddLog ? '✕ Cancel' : '+ Add New Release'}</span>
@@ -702,7 +831,7 @@ export default function Admin({ onExit }) {
                 <div className="flex justify-end gap-3 pt-2">
                   <button
                     type="button"
-                    onClick={() => setShowAddLog(false)}
+                    onClick={closeAddForm}
                     className="rounded-full border border-plum/30 px-5 py-2 text-xs text-plum hover:bg-plum/5"
                   >
                     Cancel
@@ -733,6 +862,14 @@ export default function Admin({ onExit }) {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-plum/60">{log.date}</span>
+                      <button
+                        type="button"
+                        onClick={() => startEditLog(log)}
+                        className="rounded-full border border-plum/30 bg-white/60 px-3 py-1 text-xs font-medium text-plum transition-colors hover:bg-white"
+                        title="Edit this log entry"
+                      >
+                        ✎ Edit
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteLog(log.id)}
@@ -780,6 +917,10 @@ export default function Admin({ onExit }) {
             </div>
           </div>
         </section>
+      )}
+
+      {editingLog && (
+        <LogEditorModal log={editingLog} onSave={saveEditedLog} onClose={() => setEditingLog(null)} />
       )}
     </main>
   );
