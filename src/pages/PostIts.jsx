@@ -591,7 +591,8 @@ export default function PostIts() {
 
         {notes.length > 0 && (
           <>
-            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            {/* Capped width keeps the squares note-sized on wide screens instead of filling the cork */}
+            <div className="mx-auto grid w-full max-w-[600px] grid-cols-3 gap-2 sm:gap-4">
               {notes.slice(0, visible).map((note) => (
                 <WallNote
                   key={note.id}
