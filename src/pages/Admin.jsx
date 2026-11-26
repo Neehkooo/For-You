@@ -7,7 +7,9 @@ import {
   logoutAdmin,
   getAdminStats,
   getMaintenance,
+  maintenanceCovers,
   saveMaintenance,
+  MAINTENANCE_SCOPES,
   getUpdateLogs,
   saveUpdateLogs,
   recordLetterCreated,
@@ -586,7 +588,8 @@ export default function Admin({ onExit }) {
               <div>
                 <h2 className="font-display text-2xl font-light text-plum">Scheduled Maintenance Controller</h2>
                 <p className="mt-1 text-xs text-plum/65">
-                  Configure server maintenance windows and lock letter creation on the landing page.
+                  Schedule a window for the letters, the board, or both — visitors see the notice and the chosen
+                  part of the site pauses.
                 </p>
               </div>
 
@@ -630,6 +633,35 @@ export default function Admin({ onExit }) {
                   Lock and disable the &quot;Start&quot; button on the landing page
                 </span>
               </label>
+            </div>
+
+            {/* Maintenance target */}
+            <div className="rounded-2xl border border-plum/15 bg-white/50 p-5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-plum/80">What is under maintenance?</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                {MAINTENANCE_SCOPES.map((option) => {
+                  const active = (maintenance.scope || 'all') === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setMaintenance({ ...maintenance, scope: option.id })}
+                      aria-pressed={active}
+                      className={`rounded-xl border p-3 text-left transition-all ${
+                        active
+                          ? 'border-seal bg-white shadow-xs ring-1 ring-seal/30'
+                          : 'border-plum/20 bg-white/50 hover:bg-white/70'
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold text-plum">{option.label}</span>
+                      <span className="mt-0.5 block text-[11px] leading-snug text-plum/60">{option.blurb}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[11px] leading-snug text-plum/55">
+                Post-its maintenance pauses new notes; the wall stays readable. Letters follow the lock toggle below.
+              </p>
             </div>
 
             {/* Custom Maintenance Message */}
@@ -696,11 +728,23 @@ export default function Admin({ onExit }) {
                       Estimated resume time: {new Date(maintenance.endTime).toLocaleString()}
                     </p>
                   )}
-                  {maintenance.enabled && maintenance.lockButton && (
+                  {maintenanceCovers(maintenance, 'letters') && maintenance.lockButton && (
                     <p className="mt-2 text-xs font-bold text-amber-950">
                       🔒 The &quot;Start&quot; button on the landing page is locked.
                     </p>
                   )}
+                  {maintenanceCovers(maintenance, 'board') && (
+                    <p className="mt-2 text-xs font-bold text-amber-950">
+                      🔒 Pinning notes on the board is paused.
+                    </p>
+                  )}
+                  {maintenance.enabled &&
+                    (maintenance.scope || 'all') === 'letters' &&
+                    !maintenance.lockButton && (
+                      <p className="mt-2 text-xs font-medium text-amber-900">
+                        The notice is shown, but letter creation stays open.
+                      </p>
+                    )}
                 </div>
               </div>
             </div>

@@ -84,7 +84,7 @@ function localDevApiPlugin() {
               if (typeof data.website === 'string' && data.website.trim() !== '') {
                 return sendJson(res, 201, { ok: true, note: null });
               }
-              const text = typeof data.text === 'string' ? data.text.trim().slice(0, 280) : '';
+              const text = typeof data.text === 'string' ? data.text.trim().slice(0, 255) : '';
               if (text.length < 2) return sendJson(res, 400, { error: 'Write a few words first' });
               const now = Date.now();
               const id = boardRandom(12);

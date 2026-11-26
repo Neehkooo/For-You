@@ -31,7 +31,7 @@ import { sealLetter } from '../lib/seal.js';
 import { compressImage, compressSignature, readAsDataURL, MAX_AUDIO } from '../lib/media.js';
 import { saveLetter } from '../lib/api.js';
 import { exportLetterPdf, pdfName, savePdf } from '../lib/pdf.js';
-import { recordLetterCreated, getMaintenance } from '../lib/admin.js';
+import { recordLetterCreated, getMaintenance, maintenanceCovers } from '../lib/admin.js';
 import { trackEvent } from '../lib/analytics.js';
 import {
   V13_UNLOCK_LABEL,
@@ -384,7 +384,7 @@ export default function Create() {
   const create = async () => {
     setError('');
     const maint = getMaintenance();
-    if (maint.enabled && maint.lockButton) {
+    if (maintenanceCovers(maint, 'letters') && maint.lockButton) {
       return setError(maint.message || 'Scheduled maintenance is active. Letter creation is temporarily paused.');
     }
     if (!pages.some((p) => p.trim())) {

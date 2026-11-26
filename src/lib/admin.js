@@ -79,17 +79,33 @@ export function setAdminPasscode(newPass) {
 // ---------- Scheduled Maintenance ----------
 const DEFAULT_MAINTENANCE = {
   enabled: false,
+  // 'all' | 'letters' | 'board' — which part of the site the maintenance covers.
+  scope: 'all',
   message: 'We are currently performing scheduled maintenance to upgrade our servers. Letter creation will resume shortly.',
   startTime: '',
   endTime: '',
   lockButton: true,
 };
 
+export const MAINTENANCE_SCOPES = [
+  { id: 'all', label: 'Everything', blurb: 'Both letters and the board' },
+  { id: 'letters', label: 'Letters', blurb: 'Landing start button and letter creation' },
+  { id: 'board', label: 'Post-its', blurb: 'Pinning notes on the board' },
+];
+
+// True when maintenance is on and covers the given area ('letters' or 'board').
+export function maintenanceCovers(maintenance, area) {
+  if (!maintenance?.enabled) return false;
+  const scope = maintenance.scope || 'all';
+  return scope === 'all' || scope === area;
+}
+
 export function getMaintenance() {
   try {
     const raw = local.getItem(MAINTENANCE_KEY);
     if (!raw) return DEFAULT_MAINTENANCE;
-    return { ...DEFAULT_MAINTENANCE, ...JSON.parse(raw) };
+    const stored = JSON.parse(raw);
+    return { ...DEFAULT_MAINTENANCE, ...stored, scope: stored?.scope || 'all' };
   } catch {
     return DEFAULT_MAINTENANCE;
   }
@@ -198,26 +214,31 @@ export function recordVisit() {
 export const DEFAULT_UPDATE_LOGS = [
   {
     id: 'log-v1-5-0',
-    version: 'v1.5.0',
-    date: 'December 22, 2026',
+    version: 'v1.2.4',
+    date: 'November 26, 2026',
     title: 'The Board: Notes That Last A Day',
     features: [
-      'The Board: a public wall at /post-its where anyone can pin a short note and the note disappears 24 hours after it is pinned — nothing is archived',
+      'The Board: a public wall at /post-its where anyone can pin a note of up to 255 characters, and the note disappears 24 hours after it is pinned — nothing is archived',
       'Post anonymously or sign it: leave the name empty and the note simply reads “Anonymous”',
+      'Composing moved into a “Note” modal: write, pick the paper and leave the name blank without the wall being crowded by a form',
+      'Tap a note to read it properly: it lifts off the wall, comes to the centre and opens enlarged over a dimmed, blurred backdrop',
+      'Scheduled maintenance can target the letters, the board, or both — a board window pauses pinning while the wall stays readable',
       'Six paper colours, and notes you pinned can be taken down early from the same browser',
-      'A live clock on every note: “just now”, “23h 41m left”, and the wall quietly refreshes itself while it is open',
+      'A live clock on every note, and the wall quietly refreshes itself while it is open',
     ],
     ui: [
+      'The wall is a tidy 3 × 3 grid of square notes: longer messages step down in type size so they fit, with older notes a tap away below',
+      'A hand reaches in from the right, pinches the note off the cork and carries it away before the reader opens',
+      'A slim “Pin a note…” bar sits above the cork board, with a floating 📌 shortcut on phones',
       'A cork wall with pushpins and gently tilted notes that straightens on hover, tuned for Afternoon, Dawn and Dusk',
       'The board is one tap away as “Board” in the header and in the phone menu',
-      'A small composer: write, choose the paper, leave the name blank to stay anonymous',
     ],
     fixes: [],
   },
   {
     id: 'log-v1-4-1',
-    version: 'v1.4.1',
-    date: 'December 21, 2026',
+    version: 'v1.2.3',
+    date: 'November 23, 2026',
     title: 'Pages Everywhere, Three Moods & Live Analytics',
     features: [
       'Multi-page previews: letters with more than one page now carry Prev / Next under the letter, inside the floating preview, in the expanded hover panel and in the sticker studio — all on the same page',
@@ -245,8 +266,8 @@ export const DEFAULT_UPDATE_LOGS = [
   },
   {
     id: 'log-v1-4-0',
-    version: 'v1.4.0',
-    date: 'December 20, 2026',
+    version: 'v1.2.2',
+    date: 'November 22, 2026',
     title: 'Design Gallery, Floating Preview & Draggable Photos',
     features: [
       'Design Gallery: templates, gradient palettes and handwriting fonts show three picks inline, and a “···” button opens the full collection beside a live letter preview',
@@ -269,7 +290,7 @@ export const DEFAULT_UPDATE_LOGS = [
   },
   {
     id: 'log-v1-3-2',
-    version: 'v1.3.2',
+    version: 'v1.3.1',
     date: 'December 15, 2026',
     title: 'Snowman Delivery & Refined Cat and Bird Animations',
     features: [
@@ -291,8 +312,8 @@ export const DEFAULT_UPDATE_LOGS = [
   },
   {
     id: 'log-v1-3-1',
-    version: 'v1.3.1',
-    date: 'November 28, 2026',
+    version: 'v1.2.1',
+    date: 'November 21, 2026',
     title: 'Shorter Links, No Passcode & Birthday Cake Delivery',
     features: [
       'No-Passcode Letters: choose None and the letter opens directly from the link, with no code to type or share',
@@ -391,12 +412,21 @@ export const DEFAULT_UPDATE_LOGS = [
   },
 ];
 
+// Entries carry human dates, so parse them to keep the list newest-first
+// no matter what order they were stored or edited in.
+const logTimestamp = (log) => {
+  const time = Date.parse(log?.date || '');
+  return Number.isFinite(time) ? time : 0;
+};
+
+const sortLogsByDate = (logs) => [...logs].sort((a, b) => logTimestamp(b) - logTimestamp(a));
+
 export function getUpdateLogs() {
   try {
     const raw = local.getItem(LOGS_KEY);
-    if (!raw) return DEFAULT_UPDATE_LOGS;
+    if (!raw) return sortLogsByDate(DEFAULT_UPDATE_LOGS);
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_UPDATE_LOGS;
+    if (!Array.isArray(parsed) || parsed.length === 0) return sortLogsByDate(DEFAULT_UPDATE_LOGS);
 
     // Built-in entries that nobody has edited pick up the latest shipped wording;
     // entries edited (or created) in the admin panel keep exactly what was saved.
@@ -419,17 +449,18 @@ export function getUpdateLogs() {
     });
     const missing = DEFAULT_UPDATE_LOGS.filter((l) => !known.has(l.version) && !known.has(l.id));
     if (missing.length > 0) {
-      const merged = [...missing, ...refreshed];
+      const merged = sortLogsByDate([...missing, ...refreshed]);
       local.setItem(LOGS_KEY, JSON.stringify(merged));
       return merged;
     }
     if (changed) {
-      local.setItem(LOGS_KEY, JSON.stringify(refreshed));
-      return refreshed;
+      const sorted = sortLogsByDate(refreshed);
+      local.setItem(LOGS_KEY, JSON.stringify(sorted));
+      return sorted;
     }
-    return refreshed;
+    return sortLogsByDate(refreshed);
   } catch {
-    return DEFAULT_UPDATE_LOGS;
+    return sortLogsByDate(DEFAULT_UPDATE_LOGS);
   }
 }
 

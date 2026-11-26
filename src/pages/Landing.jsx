@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNav } from '../lib/nav.js';
-import { getMaintenance } from '../lib/admin.js';
+import { getMaintenance, maintenanceCovers } from '../lib/admin.js';
 import { useV13Unlock } from '../lib/release.js';
 
 export default function Landing() {
@@ -21,7 +21,9 @@ export default function Landing() {
     };
   }, []);
 
-  const isLocked = maint.enabled && maint.lockButton;
+  // A board-only window leaves letters untouched.
+  const lettersDown = maintenanceCovers(maint, 'letters');
+  const isLocked = lettersDown && maint.lockButton;
 
   const start = () => {
     if (open || isLocked) return;
@@ -55,7 +57,7 @@ export default function Landing() {
         </p>
 
         {/* Maintenance Banner */}
-        {maint.enabled && (
+        {lettersDown && (
           <div className="mt-6 rounded-2xl border border-amber-400 bg-amber-50/90 p-5 shadow-xs">
             <div className="flex items-start gap-3">
               <span className="text-2xl shrink-0" aria-hidden="true">⚠️</span>

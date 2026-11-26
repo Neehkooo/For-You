@@ -15,7 +15,7 @@ export const BOARD_COLORS = [
   { id: 'peach', label: 'Peach', bg: '#fbdbc0', edge: '#efbe98', ink: '#4a2e18' },
 ];
 
-export const NOTE_LIMIT = 280;
+export const NOTE_LIMIT = 255;
 
 export const boardColor = (id) => BOARD_COLORS.find((c) => c.id === id) || BOARD_COLORS[0];
 

@@ -4,7 +4,7 @@ import { redis, configured } from '../../server/redis.js';
 // Public board: notes live for 24 hours and then vanish. Nothing is archived.
 const NOTE_TTL_SECONDS = 60 * 60 * 24;
 const NOTE_TTL_MS = NOTE_TTL_SECONDS * 1000;
-const MAX_TEXT = 280;
+const MAX_TEXT = 255;
 const MAX_NAME = 24;
 const MAX_NOTES = 80; // newest first, enough to fill a wall
 const COLORS = new Set(['butter', 'rose', 'mint', 'sky', 'lilac', 'peach']);
